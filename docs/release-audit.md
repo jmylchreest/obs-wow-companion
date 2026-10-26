@@ -35,7 +35,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 ## Current verification
 
-- `cargo-nextest nextest run --workspace`: 88 passed, 7 opt-in tests skipped
+- `cargo-nextest nextest run --workspace`: 90 passed, 7 opt-in tests skipped
   (credential store, native OBS reconnect, throughput and four ENOSPC checks). Local sockets were
   enabled for mock servers. The restricted run failed only at socket creation.
 - `cargo clippy -p owc-app --all-targets -- -D warnings`: passed after the recovery
@@ -62,6 +62,11 @@ The acceptance checklist is not the entire specification. Source inspection on
 - Desktop Open folder actions now exist for original clips and exported bundles.
   Path validation and WebKit bridge wiring pass; real native file-manager opening
   remains a platform walkthrough check.
+
+The log adapter now combines native filesystem notifications with periodic
+reconciliation, using one coalesced pending wakeup and preserving checkpoint
+backpressure. Linux create/append/rotation and missing-folder recovery tests pass;
+Windows native behaviour remains a validation gate.
 
 Continue auditing the complete source contract; this list does not establish that
 all first-release features are finished.

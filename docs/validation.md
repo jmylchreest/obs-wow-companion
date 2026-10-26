@@ -515,3 +515,22 @@ The same run passed scene restoration, automatic closure-to-queue latency
 (65.24 ms), and owned shutdown. Workspace nextest: 88 passed, 7 opt-in tests
 skipped; Rust 1.95 strict Clippy and documentation checks passed. This uses
 synthetic log events and video, not native Windows or live gameplay evidence.
+
+
+### 2026-10-26: Native combat-log notifications
+
+The log worker now uses notify's platform backend to wake on filesystem changes,
+while retaining its 250 ms reconciliation interval. A one-slot channel coalesces
+bursts; access-only events are ignored to avoid waking from our own reads. Durable
+checkpoint acknowledgement still gates the next read. Missing or replaced folders
+and missed notifications remain covered by reconciliation.
+
+Linux tests verify create, append and rename notifications, startup with a missing
+folder followed by recreation, and no next batch before acknowledgement. Existing
+rotation, UTF-8, lifecycle and backlog tests pass. Windows native notification
+behaviour remains subject to CI and gameplay qualification. Dependency notices
+include notify's CC0 dedication, with a package/version-scoped cargo-deny allowance.
+
+Workspace nextest after notification integration: 90 passed, 7 opt-in skipped.
+Rust 1.95 strict Clippy, dependency checks and documentation validation pass.
+The generated notice retains upstream CC0 text verbatim, including its whitespace.

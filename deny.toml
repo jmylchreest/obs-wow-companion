@@ -10,6 +10,8 @@ ignore = [
 [licenses]
 allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0", "MPL-2.0"]
 confidence-threshold = 0.8
+# notify supplies its CC0 dedication; retain it in THIRD-PARTY-NOTICES.
+exceptions = [{ name = "notify", version = "8.2.1", allow = ["CC0-1.0"] }]
 
 [bans]
 multiple-versions = "warn"

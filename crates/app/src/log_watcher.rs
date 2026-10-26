@@ -3,6 +3,7 @@ use crate::{
     config::Installation,
     events::{CaptureEvent, EventBus},
 };
+use notify::Watcher;
 use owc_domain::{Activity, Marker, Outcome};
 use owc_wow_log::{Detector, Flavour, Tailer};
 use serde::{Deserialize, Serialize};
@@ -273,6 +274,39 @@ fn poll(
     }
     (events, errors, None)
 }
+fn watch_changes(
+    path: &std::path::Path,
+) -> (
+    Option<notify::RecommendedWatcher>,
+    tokio::sync::mpsc::Receiver<()>,
+) {
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
+    let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        // A wakeup requests reconciliation, not one read per notification. Coalescing
+        // keeps bursts bounded while the controller acknowledges durable checkpoints.
+        if !matches!(
+            event,
+            Ok(notify::Event {
+                kind: notify::EventKind::Access(_),
+                ..
+            })
+        ) {
+            let _ = tx.try_send(());
+        }
+    })
+    .and_then(|mut watcher| {
+        watcher.watch(path, notify::RecursiveMode::NonRecursive)?;
+        Ok(watcher)
+    });
+    match watcher {
+        Ok(watcher) => (Some(watcher), rx),
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "Log notifications unavailable; periodic reconciliation remains active");
+            (None, rx)
+        }
+    }
+}
+
 pub fn spawn(
     installation: Installation,
     mut state: LogState,
@@ -282,6 +316,7 @@ pub fn spawn(
     bus: EventBus,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let (_watcher, mut changes) = watch_changes(&installation.logs);
         let mut recovery = vec![];
         if recover && let Some(mut activity) = state.detector.active.take() {
             activity.finish(
@@ -342,7 +377,10 @@ pub fn spawn(
                 }
             }
             if !state.tailer.has_backlog {
-                tokio::time::sleep(Duration::from_millis(250)).await;
+                tokio::select! {
+                    Some(()) = changes.recv() => {},
+                    () = tokio::time::sleep(Duration::from_millis(250)) => {},
+                }
             }
         }
     })
@@ -352,6 +390,75 @@ pub fn spawn(
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[tokio::test]
+    async fn reconciliation_recovers_when_notification_folder_is_missing() {
+        let root = tempfile::tempdir().expect("root");
+        let logs = root.path().join("Logs");
+        std::fs::create_dir(&logs).expect("logs");
+        let config = installation(logs.clone());
+        let mut initial = LogState::new(&config);
+        poll(&config, &mut initial, 0, i64::MAX);
+        std::fs::remove_dir(&logs).expect("remove folder");
+        let (bus, mut receiver) = EventBus::new();
+        let task = spawn(config, initial, 1, Duration::from_hours(8760), false, bus);
+        let CaptureEvent::Logs(missing) = receiver.recv().await.expect("missing folder") else {
+            panic!("log batch")
+        };
+        assert!(missing.error.is_some());
+        std::fs::create_dir(&logs).expect("restore folder");
+        std::fs::write(
+            logs.join("WoWCombatLog-new.txt"),
+            "01/15/2026 12:00:00.000  ENCOUNTER_START,1001,Boss,16,20\n",
+        )
+        .expect("new log");
+        missing.committed.send(()).expect("ack");
+        let CaptureEvent::Logs(batch) =
+            tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+                .await
+                .expect("reconcile timeout")
+                .expect("batch")
+        else {
+            panic!("log batch")
+        };
+        assert!(batch.error.is_none());
+        assert!(
+            batch
+                .events
+                .iter()
+                .any(|event| matches!(event.event, ActivityEvent::Started(_)))
+        );
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn native_notifications_wake_on_create_append_and_rotation() {
+        let root = tempfile::tempdir().expect("root");
+        let (watcher, mut changes) = watch_changes(root.path());
+        assert!(watcher.is_some(), "native watcher unavailable");
+        let file = root.path().join("WoWCombatLog.txt");
+        for action in 0..3 {
+            while changes.try_recv().is_ok() {}
+            match action {
+                0 => std::fs::write(&file, "first\n").expect("create"),
+                1 => writeln!(
+                    std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&file)
+                        .expect("open"),
+                    "second"
+                )
+                .expect("append"),
+                _ => std::fs::rename(&file, root.path().join("WoWCombatLog-old.txt"))
+                    .expect("rotate"),
+            }
+            tokio::time::timeout(Duration::from_secs(3), changes.recv())
+                .await
+                .expect("native event")
+                .expect("wakeup");
+            assert!(changes.len() <= 1, "wakeups must remain bounded");
+        }
+    }
 
     fn installation(path: PathBuf) -> Installation {
         Installation {
