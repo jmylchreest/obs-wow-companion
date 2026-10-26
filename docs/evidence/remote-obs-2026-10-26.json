@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "e65fc6664bf42e33743d81c90a8340a6bb0c504e",
+  "run_url": "https://github.com/jmylchreest/obs-wow-companion/actions/runs/40375838240",
+  "result": "success",
+  "runner": "ubuntu-24.04",
+  "obs_version": "32.2.0",
+  "probe_evidence": [
+    "2026-10-26T18:20:03.539710Z  INFO obs_probe: Native OBS closure-to-export latency passed latency=113.043938ms",
+    "2026-10-26T18:20:47.704903Z  INFO obs_probe: Delayed encounter recovered with expected footage coverage truncated=false",
+    "2026-10-26T18:21:31.815317Z  INFO obs_probe: Delayed encounter recovered with expected footage coverage truncated=true",
+    "2026-10-26T18:21:34.778392Z  INFO obs_probe: Native OBS shutdown stopped owned capture and saved unfinished work",
+    "2026-10-26T18:21:34.778441Z  INFO obs_probe: Companion end-to-end manual and combat-log capture, split, export and two audio tracks passed"
+  ],
+  "limitations": [
+    "Synthetic scene and logs on isolated Xvfb; not gameplay or Wayland capture qualification.",
+    "Predates precise-export time-base fix 89453f8.",
+    "Nested sidecars were not retained by this run's evidence collector."
+  ]
+}

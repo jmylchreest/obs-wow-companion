@@ -661,3 +661,24 @@ Validation scripts now explicitly use UTF-8 for Path text I/O. Documentation,
 license-notice regeneration and all seven CI policy tests pass locally. Native
 Windows rerun remains required. No package publication was allowed by the failed
 quality run.
+
+
+### 2026-10-26: Hosted OBS integration passed
+
+[Run 40375838240](https://github.com/jmylchreest/obs-wow-companion/actions/runs/40375838240)
+passed on Ubuntu 24.04 with OBS 32.2.0 at `e65fc66`. The private native probe,
+reconnect test and browser setup checks all completed successfully. The probe
+confirmed manual and combat-log capture, splitting, two-track export, complete
+and partial delayed-history recovery, and shutdown of owned capture with unfinished
+work saved. Closure-to-export latency was 113.04 ms in this isolated run.
+
+[Retained summary](evidence/remote-obs-2026-10-26.json) records provenance and
+selected probe output. The downloaded artifact also contains setup screenshots.
+This is synthetic Xvfb qualification, not Windows, Wayland or real gameplay
+qualification, and predates the precise-export fix in `89453f8`. The newer
+collector will retain nested sidecars on subsequent runs.
+
+Windows workspace tests and the native credential-store test passed in run
+40374920263, although that run failed its later documentation check. Credential
+storage is therefore verified independently; full Windows CI/package validation
+still requires the UTF-8 fix's rerun.

@@ -10,7 +10,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 | # | Requirement | Evidence and remaining gate |
 | --- | --- | --- |
-| 1 | Both-OS OBS playback and setup failures | Linux isolated/browser checks recorded; native Windows capture, playback, permissions and credential checks outstanding. |
+| 1 | Both-OS OBS playback and setup failures | Linux isolated/browser checks recorded; native Windows credential round trip passed remotely; capture, playback and permissions checks remain outstanding. |
 | 2 | Delayed start and retained pre-roll | Timeline tests cover retained intervals. A controller regression accepts a 30-second delayed start covered by the current session's retained segment and rejects absent or stopping captures. A partial-coverage regression retains the encounter and produces an explicit truncated plan; isolated native Linux OBS also passes a 30-second delayed automatic encounter with complete coverage, 1,004 ms retained pre-roll and two audio tracks. Native Linux partial-history export also passes with an explicit warning and playable retained footage; Windows validation remains. Encounter-triggered capture cannot supply footage before OBS started. |
 | 3 | 45-minute nested M+ | 45-minute file-watcher fixture passes with five nested bosses/deaths, periodic actions, five-minute timeout, one successful run and no duplicate raids. Native media timing is covered separately. |
 | 4 | Consecutive overlapping pulls | Controller overlap and timeline tests pass; verify published clips against frame-clock source. |
@@ -34,6 +34,11 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 | 22 | New-user walkthrough | Existing screenshots/evidence cover portions; complete final candidate walkthrough on both targets remains. |
 
 ## Current verification
+
+- Hosted Ubuntu OBS 32.2.0 integration passed at `e65fc66`, including private
+  capture/export, delayed history, reconnect and browser setup. See
+  [remote evidence](evidence/remote-obs-2026-10-26.json). This predates the latest
+  precise-export fix and does not qualify real gameplay or Wayland capture.
 
 - Current committed Linux package (`b247956`) passes extracted service/media,
   native window-close, WebKit playback/UI and process-crash recovery checks. See
