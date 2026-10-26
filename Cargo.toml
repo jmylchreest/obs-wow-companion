@@ -27,7 +27,7 @@ tokio-tungstenite = "0.28"
 rusqlite = { version = "0.38", features = ["bundled"] }
 axum = "0.8"
 wry = "0.53"
-tao = "0.34"
+tao = "0.37"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "limit"] }
 clap = { version = "4", features = ["derive"] }
