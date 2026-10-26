@@ -23,6 +23,8 @@
 
 ### Added
 
+- Native OBS regression for a 30-second delayed encounter start, retained pre-roll and automatic recording completion.
+
 - Player-focused getting-started README and responsive project website, with actual app screenshots and a silent demo using fictional encounter data.
 
 - Open the original recording or latest shared bundle folder directly from desktop video details, with errors for missing files.

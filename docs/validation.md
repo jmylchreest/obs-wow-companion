@@ -498,3 +498,20 @@ passes after this change (`/tmp/owc-desktop-7nj49np5`).
 The package workflow now runs this desktop check on Windows, and the quality
 workflow opts into the existing unique-scope credential-store round trip on its
 disposable Windows runner. Their inclusion is not yet a passing runtime result.
+
+
+### 2026-10-26: Delayed start with native automatic capture
+
+`scripts/isolated-obs.py` now delivers an encounter start 30 seconds late while
+OBS is already recording an earlier automatic encounter. The delayed encounter
+replaces the earlier raid and must retain its own footage, then stop capture
+automatically after completion. This avoids manual capture's completion fallback.
+The Linux X11 run passed in `/tmp/owc-obs-mmyp5e2c`: complete coverage, 1,004 ms
+retained pre-roll, 33,033 ms output and two AAC audio tracks. Lossless copying
+failed duration validation for this cut and correctly fell back to CPU encoding.
+[Structured evidence](evidence/delayed-start-2026-10-26.json) records that limitation.
+
+The same run passed scene restoration, automatic closure-to-queue latency
+(65.24 ms), and owned shutdown. Workspace nextest: 88 passed, 7 opt-in tests
+skipped; Rust 1.95 strict Clippy and documentation checks passed. This uses
+synthetic log events and video, not native Windows or live gameplay evidence.

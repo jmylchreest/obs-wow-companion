@@ -11,7 +11,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 | # | Requirement | Evidence and remaining gate |
 | --- | --- | --- |
 | 1 | Both-OS OBS playback and setup failures | Linux isolated/browser checks recorded; native Windows capture, playback, permissions and credential checks outstanding. |
-| 2 | Delayed start and retained pre-roll | Timeline tests cover retained intervals. A controller regression accepts a 30-second delayed start covered by the current session's retained segment and rejects uncovered or stopping captures; exact delayed live scenario still needs candidate validation. Encounter-triggered capture cannot supply footage before OBS started. |
+| 2 | Delayed start and retained pre-roll | Timeline tests cover retained intervals. A controller regression accepts a 30-second delayed start covered by the current session's retained segment and rejects uncovered or stopping captures; isolated native Linux OBS also passes a 30-second delayed automatic encounter with complete coverage, 1,004 ms retained pre-roll and two audio tracks. Windows validation remains. Encounter-triggered capture cannot supply footage before OBS started. |
 | 3 | 45-minute nested M+ | 45-minute file-watcher fixture passes with five nested bosses/deaths, periodic actions, five-minute timeout, one successful run and no duplicate raids. Native media timing is covered separately. |
 | 4 | Consecutive overlapping pulls | Controller overlap and timeline tests pass; verify published clips against frame-clock source. |
 | 5 | Rotation, truncation, UTF-8, replay | Tailer restart/backlog and UTF-8 tests pass. Watcher now defers expiry while unread batches remain. Broader live-delivery qualification remains. |
@@ -35,7 +35,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 ## Current verification
 
-- `cargo-nextest nextest run --workspace`: 87 passed, 7 opt-in tests skipped
+- `cargo-nextest nextest run --workspace`: 88 passed, 7 opt-in tests skipped
   (credential store, native OBS reconnect, throughput and four ENOSPC checks). Local sockets were
   enabled for mock servers. The restricted run failed only at socket creation.
 - `cargo clippy -p owc-app --all-targets -- -D warnings`: passed after the recovery

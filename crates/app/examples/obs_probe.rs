@@ -185,6 +185,7 @@ async fn verify_engine(spool: &std::path::Path) -> Result<()> {
             )?;
             verify_scene_restored(&scene_client, &original_scene).await?;
             verify_automatic_capture(&tx, &status, &logs).await?;
+            verify_delayed_capture(&status, &logs, &root).await?;
             verify_shutdown(&tx, &status).await?;
             task.abort();
             tracing::info!(
@@ -224,16 +225,20 @@ fn verify_manual_markers(state: &serde_json::Value) -> Result<()> {
 }
 
 fn append_event(logs: &std::path::Path, event: &str) -> Result<()> {
+    append_event_at(logs, event, chrono::Local::now())
+}
+
+fn append_event_at(
+    logs: &std::path::Path,
+    event: &str,
+    at: chrono::DateTime<chrono::Local>,
+) -> Result<()> {
     use std::io::Write;
     let mut file = std::fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open(logs.join("WoWCombatLog-synthetic.txt"))?;
-    writeln!(
-        file,
-        "{}  {event}",
-        chrono::Local::now().format("%m/%d/%Y %H:%M:%S%.3f")
-    )?;
+    writeln!(file, "{}  {event}", at.format("%m/%d/%Y %H:%M:%S%.3f"))?;
     Ok(())
 }
 
@@ -507,4 +512,69 @@ async fn verify_shutdown(
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     anyhow::bail!("shutdown did not settle: {}", *status.borrow())
+}
+
+async fn verify_delayed_capture(
+    status: &tokio::sync::watch::Receiver<serde_json::Value>,
+    logs: &std::path::Path,
+    root: &std::path::Path,
+) -> Result<()> {
+    use std::time::Duration;
+    append_event(logs, "ENCOUNTER_START,1005,Earlier boss,16,20")?;
+    for _ in 0..40 {
+        if status.borrow()["armed"] == true {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    anyhow::ensure!(
+        status.borrow()["armed"] == true,
+        "earlier encounter did not start capture"
+    );
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    let start = chrono::Local::now();
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    append_event_at(logs, "ENCOUNTER_START,1004,Delayed boss,16,20", start)?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    append_event(logs, "ENCOUNTER_END,1004,Delayed boss,16,20,1")?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    for _ in 0..160 {
+        let state = status.borrow().clone();
+        if let Some(activity) = state["activities"].as_array().and_then(|items| {
+            items
+                .iter()
+                .find(|a| a["name"] == "Delayed boss" && a["status"] == "ready")
+        }) {
+            let path =
+                std::path::PathBuf::from(activity["path"].as_str().context("delayed clip path")?);
+            let sidecar: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path.with_extension("json"))?)?;
+            let plan: owc_domain::ClipPlan = serde_json::from_value(sidecar["plan"].clone())?;
+            anyhow::ensure!(
+                plan.actual_start_ms
+                    .is_some_and(|at| at <= start.timestamp_millis() - 1000),
+                "delayed clip lost retained pre-roll: {plan:?}"
+            );
+            anyhow::ensure!(
+                plan.sources
+                    .iter()
+                    .map(|range| range.duration_ms)
+                    .sum::<i64>()
+                    >= 31_000,
+                "delayed clip lost footage: {plan:?}"
+            );
+            std::fs::write(
+                root.join("delayed-start.json"),
+                serde_json::to_vec_pretty(&sidecar)?,
+            )?;
+            tracing::info!("30-second delayed encounter recovered with retained pre-roll");
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    anyhow::bail!(
+        "delayed encounter did not produce playable footage: {}",
+        *status.borrow()
+    )
 }

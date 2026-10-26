@@ -34,7 +34,7 @@ try:
  obs=subprocess.Popen(["obs","--multi","--disable-shutdown-check","--skip-plugin-load-warning"],env=env,stdout=olog,stderr=olog)
  time.sleep(6)
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"screen.png")],check=True)
- out=subprocess.run(["target/debug/examples/obs_probe",str(root/"videos")],capture_output=True,text=True,timeout=65,env=env)
+ out=subprocess.run(["target/debug/examples/obs_probe",str(root/"videos")],capture_output=True,text=True,timeout=150,env=env)
  (root/"probe.log").write_text(out.stdout+out.stderr)
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"after.png")],check=True)
  print("Evidence:",root);print(out.stdout[-9000:]);print(out.stderr[-1000:])

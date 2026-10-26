@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-26",
+  "platform": "Linux X11, private Xvfb, OBS 32.2.2",
+  "scenario": "Automatic capture for an earlier raid; next encounter start delivered 30 seconds late; automatic stop after completion",
+  "delivery_delay_seconds": 30,
+  "coverage": "complete",
+  "retained_pre_roll_ms": 1004,
+  "duration_ms": 33033,
+  "audio_tracks": 2,
+  "export": {
+    "encoder": "libx264",
+    "fallback": "Preferred export failed; used CPU: export duration differs from requested range"
+  },
+  "evidence_directory": "/tmp/owc-obs-mmyp5e2c",
+  "scope": "Synthetic combat log and test pattern; not Windows or live gameplay qualification"
+}
