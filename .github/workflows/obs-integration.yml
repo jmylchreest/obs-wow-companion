@@ -34,7 +34,7 @@ jobs:
         env:
           OWC_BROWSER_SETUP_TEST: "1"
           OWC_RECONNECT_TEST: "1"
-        run: dbus-run-session -- python3 scripts/isolated-obs.py
+        run: python3 scripts/private-session.py python3 scripts/isolated-obs.py
       - name: Collect evidence
         if: always()
         run: python3 scripts/ci-tools.py evidence

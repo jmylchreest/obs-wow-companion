@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Give native test sessions private runtime/config directories so D-Bus-activated services cannot replace desktop credential-agent sockets.
+
 - Bound Linux CI dependency installation and avoid optional recommended packages after a slow mirror exhausted the packaging job.
 
 - Discard cancelled OBS requests before sending them, preventing an expired queued recording command from executing later.

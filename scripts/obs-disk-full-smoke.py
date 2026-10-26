@@ -19,7 +19,7 @@ else:
     subprocess.run(["mount", "-t", "tmpfs", "-o", "size=128m,nosuid,nodev", "owc-obs-test", str(limited)], check=True)
     try:
         env = dict(os.environ, OWC_NATIVE_OBS_LIMITED=str(limited))
-        subprocess.run(["dbus-run-session", "--", "python3", "scripts/isolated-obs.py"],
+        subprocess.run([sys.executable, "scripts/private-session.py", sys.executable, "scripts/isolated-obs.py"],
                        env=env, check=True, timeout=120)
     finally:
         subprocess.run(["umount", str(limited)], check=True)

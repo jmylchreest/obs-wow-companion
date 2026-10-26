@@ -259,7 +259,9 @@ try:
     click('#library-tab')
     click("#favourites-only")
     assert js("return document.getElementById('favourites-only').getAttribute('aria-pressed')") == "true"
-    click("#favourites-only")
+    # Reset the filter fixture without a second rapid native click becoming a double-click.
+    js("document.getElementById('favourites-only').click()")
+    assert js("return document.getElementById('favourites-only').getAttribute('aria-pressed')") == "false"
     clip_id = str(uuid.uuid4())
     clip_path = root / "data/videos" / (clip_id + ".mkv")
     create_fixture(clip_path)

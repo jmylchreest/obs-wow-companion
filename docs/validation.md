@@ -946,3 +946,19 @@ capture suite. The earlier standalone browser suite also passed in
 Hosted package reruns remain blocked on committing/pushing: the configured SSH
 signing agent alternates between refusing connections and having no identities.
 Signing has not been disabled or bypassed. No release is published.
+
+
+### 2026-10-26: Native test-session isolation
+
+A private D-Bus activation had launched an extra `rosecd` while inheriting the
+desktop runtime directory, disrupting the signing-agent socket. The extra test
+daemon was stopped and the normal user service restarted; the user subsequently
+unlocked the vault and signing succeeded. Native CI probes now enter through
+`scripts/private-session.py`, which sets private runtime/config/data/cache paths
+before starting D-Bus. It also terminates the private process group and cleans up
+portal FUSE mounts without touching mounts outside that temporary directory.
+The credential-store probe already sets private paths and keeps its own launcher.
+
+The final isolated OBS/browser setup suite passes in `/tmp/owc-browser-f3vcm2x6`,
+including wrapper cleanup. The desktop signing socket inode is unchanged before
+and after the complete run. Workflow lint and all seven CI policy tests pass.
