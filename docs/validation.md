@@ -591,3 +591,22 @@ entry, and requires the first MiB of video before cancelling.
 All three corrected tests pass on Linux and strict Rust 1.95 lint passes. Native
 Windows rerun is still required; these changes are not a passing Windows result.
 The failed quality job prevents packaging and release publication as intended.
+
+
+### 2026-10-26: Fast-copy fallback investigation
+
+Inspected the retained native OBS source from `/tmp/owc-obs-ei_zpu03` to explain
+its CPU fallback. A 3.000-second concat input seek for a 33.062-second interval
+produced 34.233 seconds, failing duration validation. Moving `-ss` after the input
+produced 33.137 seconds but its first decoded-frame hash matched source time
+4.000, not 3.000. A duration-only apparent improvement would lose a second of
+video and break marker alignment. No seek-order change was applied.
+
+Private experiment outputs are in `/tmp/owc-copy-check-7yb7s7o4`. CPU fallback
+remains the validated behavior for this source. Any future fast-seek optimization
+must verify decoded frame identity and timestamp origin as well as duration.
+
+The pending implementation and Windows fixture fixes were pushed to the temporary
+`ci/release-validation` branch and dispatched as run 40374920263. This allows the
+older main-branch Linux job to finish without cancellation. Neither run is yet
+a passing full release-validation result.
