@@ -35,6 +35,10 @@ with (root / "app.log").open("w") as log:
             assert error.code == 401
         client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         client.open(url, timeout=10).read()
+        initial = json.load(client.open(base + "/api/status", timeout=10))
+        assert initial["connected"] is False
+        assert isinstance(initial["activities"], list)
+        assert isinstance(initial["config"], dict)
         def action(data):
             request = urllib.request.Request(base + "/api/action", data=json.dumps(data).encode(),
                 headers={"Content-Type":"application/json", "X-OWC-Request":"1"})

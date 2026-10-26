@@ -34,12 +34,21 @@ impl LogState {
     }
 }
 #[derive(Debug, Clone, Serialize)]
+pub struct LineProvenance {
+    pub file_identity: String,
+    pub byte_offset: u64,
+    pub raw_timestamp: String,
+    pub event_utc_ms: i64,
+    pub received_utc_ms: i64,
+}
+#[derive(Debug, Clone, Serialize)]
 pub struct Source {
     pub installation_id: Uuid,
     pub installation_name: String,
     pub flavour: Flavour,
     pub logs_directory: PathBuf,
     pub log_file: Option<PathBuf>,
+    pub line: Option<LineProvenance>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum AbandonReason {
@@ -83,6 +92,7 @@ fn source(installation: &Installation, log_file: Option<PathBuf>) -> Source {
         flavour: installation.flavour,
         logs_directory: installation.logs.clone(),
         log_file,
+        line: None,
     }
 }
 fn stamp(activity: &mut Activity, installation: &Installation) {
@@ -166,6 +176,103 @@ fn record_boundary(
     }
 }
 
+fn ingest_line(
+    installation: &Installation,
+    state: &mut LogState,
+    line: owc_wow_log::SourceLine,
+    parsed: &owc_wow_log::Event,
+    now: i64,
+    events: &mut Vec<LogEvent>,
+) {
+    let emitted_from = events.len();
+    let provenance = LineProvenance {
+        file_identity: line.identity,
+        byte_offset: line.offset,
+        raw_timestamp: line.text.split_once("  ").map_or("", |(at, _)| at).into(),
+        event_utc_ms: parsed.at,
+        received_utc_ms: now,
+    };
+    if state
+        .last_source
+        .as_ref()
+        .is_some_and(|path| path != &line.path)
+    {
+        state.death_recaps = owc_wow_log::DeathRecaps::default();
+    }
+    let recent_hits = state.death_recaps.ingest(parsed);
+    state.last_source = Some(line.path.clone());
+    record_boundary(events, installation, &line.path, parsed);
+    let previous = state.detector.active.clone();
+    for mut activity in state.detector.ingest(parsed) {
+        stamp(&mut activity, installation);
+        events.push(LogEvent {
+            source: source(installation, Some(line.path.clone())),
+            event: completed(activity, AbandonReason::Replaced),
+        });
+    }
+    if parsed.kind() == "UNIT_DIED"
+        && let Some(activity) = &mut state.detector.active
+        && let Some(marker) = activity.markers.last_mut()
+        && marker.kind == "death"
+        && marker.at_ms == parsed.at
+    {
+        marker.recent_hits.clone_from(&recent_hits);
+    }
+    let marker = marker_from_log(parsed)
+        .map(|mut marker| {
+            if marker.kind == "death" {
+                marker.recent_hits = recent_hits;
+            }
+            marker
+        })
+        .filter(|marker| {
+            if marker.kind != "combat_activity" {
+                return true;
+            }
+            if state
+                .last_combat_sample_ms
+                .is_some_and(|last| marker.at_ms >= last && marker.at_ms - last < 1000)
+            {
+                return false;
+            }
+            state.last_combat_sample_ms = Some(marker.at_ms);
+            true
+        });
+    if let Some(marker) = &marker
+        && marker.kind == "combat_activity"
+        && let Some(activity) = &mut state.detector.active
+    {
+        activity.markers.push(marker.clone());
+    }
+    if let Some(activity) = &mut state.detector.active {
+        stamp(activity, installation);
+        let changed = previous.as_ref().is_none_or(|old| old.id != activity.id);
+        if changed
+            || previous.as_ref().is_some_and(|old| {
+                old.markers.len() != activity.markers.len() || old.character != activity.character
+            })
+        {
+            events.push(LogEvent {
+                source: source(installation, Some(line.path.clone())),
+                event: if changed {
+                    ActivityEvent::Started(activity.clone())
+                } else {
+                    ActivityEvent::Updated(activity.clone())
+                },
+            });
+        }
+    }
+    if let Some(marker) = marker {
+        events.push(LogEvent {
+            source: source(installation, Some(line.path)),
+            event: ActivityEvent::Marker(marker),
+        });
+    }
+    for event in &mut events[emitted_from..] {
+        event.source.line = Some(provenance.clone());
+    }
+}
+
 fn poll(
     installation: &Installation,
     state: &mut LogState,
@@ -183,83 +290,7 @@ fn poll(
             errors += 1;
             continue;
         };
-        if state
-            .last_source
-            .as_ref()
-            .is_some_and(|path| path != &line.path)
-        {
-            state.death_recaps = owc_wow_log::DeathRecaps::default();
-        }
-        let recent_hits = state.death_recaps.ingest(&parsed);
-        state.last_source = Some(line.path.clone());
-        record_boundary(&mut events, installation, &line.path, &parsed);
-        let previous = state.detector.active.clone();
-        for mut activity in state.detector.ingest(&parsed) {
-            stamp(&mut activity, installation);
-            events.push(LogEvent {
-                source: source(installation, Some(line.path.clone())),
-                event: completed(activity, AbandonReason::Replaced),
-            });
-        }
-        if parsed.kind() == "UNIT_DIED"
-            && let Some(activity) = &mut state.detector.active
-            && let Some(marker) = activity.markers.last_mut()
-            && marker.kind == "death"
-            && marker.at_ms == parsed.at
-        {
-            marker.recent_hits.clone_from(&recent_hits);
-        }
-        let marker = marker_from_log(&parsed)
-            .map(|mut marker| {
-                if marker.kind == "death" {
-                    marker.recent_hits = recent_hits;
-                }
-                marker
-            })
-            .filter(|marker| {
-                if marker.kind != "combat_activity" {
-                    return true;
-                }
-                if state
-                    .last_combat_sample_ms
-                    .is_some_and(|last| marker.at_ms >= last && marker.at_ms - last < 1000)
-                {
-                    return false;
-                }
-                state.last_combat_sample_ms = Some(marker.at_ms);
-                true
-            });
-        if let Some(marker) = &marker
-            && marker.kind == "combat_activity"
-            && let Some(activity) = &mut state.detector.active
-        {
-            activity.markers.push(marker.clone());
-        }
-        if let Some(activity) = &mut state.detector.active {
-            stamp(activity, installation);
-            let changed = previous.as_ref().is_none_or(|old| old.id != activity.id);
-            if changed
-                || previous.as_ref().is_some_and(|old| {
-                    old.markers.len() != activity.markers.len()
-                        || old.character != activity.character
-                })
-            {
-                events.push(LogEvent {
-                    source: source(installation, Some(line.path.clone())),
-                    event: if changed {
-                        ActivityEvent::Started(activity.clone())
-                    } else {
-                        ActivityEvent::Updated(activity.clone())
-                    },
-                });
-            }
-        }
-        if let Some(marker) = marker {
-            events.push(LogEvent {
-                source: source(installation, Some(line.path)),
-                event: ActivityEvent::Marker(marker),
-            });
-        }
+        ingest_line(installation, state, line, &parsed, now, &mut events);
     }
     // Wall-clock expiry is unsafe until the bounded reader reaches the file end.
     if state.tailer.has_backlog {
@@ -482,6 +513,39 @@ mod tests {
         )
         .expect("append");
     }
+    #[test]
+    fn emitted_events_keep_raw_time_receipt_and_file_position() {
+        let root = tempfile::tempdir().expect("root");
+        let config = installation(root.path().into());
+        let file = config.logs.join("WoWCombatLog-provenance.txt");
+        let raw_time = "01/15/2026 12:00:00.000";
+        let line = format!("{raw_time}  ENCOUNTER_START,1001,Boss,16,20");
+        let at = owc_wow_log::parse(&line, 0).expect("event").at;
+        let mut state = LogState::new(&config);
+        poll(&config, &mut state, at, 300_000);
+        append(&file, "");
+        append(&file, &line);
+        let (events, errors, error) = poll(&config, &mut state, at + 30_000, 300_000);
+        assert_eq!(errors, 0);
+        assert!(error.is_none());
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event.event, ActivityEvent::Started(_)))
+        );
+        for event in events {
+            let provenance = event.source.line.expect("source line");
+            assert_eq!(provenance.byte_offset, 1);
+            assert_eq!(provenance.raw_timestamp, raw_time);
+            assert_eq!(provenance.event_utc_ms, at);
+            assert_eq!(provenance.received_utc_ms, at + 30_000);
+            assert!(!provenance.file_identity.is_empty());
+        }
+        let (expired, _, _) = poll(&config, &mut state, at + 400_000, 300_000);
+        assert!(!expired.is_empty());
+        assert!(expired.iter().all(|event| event.source.line.is_none()));
+    }
+
     #[test]
     fn forty_five_minute_key_keeps_nested_bosses_and_deaths_in_one_activity() {
         use chrono::TimeZone;

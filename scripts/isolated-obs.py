@@ -45,10 +45,12 @@ try:
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"after.png")],check=True)
  print("Evidence:",root);print(out.stdout[-9000:]);print(out.stderr[-1000:])
  if out.returncode: raise SystemExit(out.returncode)
- if os.environ.get("OWC_RECONNECT_TEST") == "1":
+ if not os.environ.get("OWC_NATIVE_OBS_LIMITED") and os.environ.get("OWC_BROWSER_SETUP_ONLY") != "1":
+  subprocess.run(["python3","scripts/marker-alignment.py",str(root)],check=True,timeout=90)
+ if os.environ.get("OWC_RECONNECT_TEST") == "1" and os.environ.get("OWC_BROWSER_SETUP_ONLY") != "1":
   reconnect_env=os.environ.copy();reconnect_env["OWC_RECOVERY_OBS_PORT"]="4457"
   subprocess.run(["cargo","nextest","run","-p","owc-app","--run-ignored","only","-E","test(native_obs_reconnect_keeps_owned_fragment_and_closes_it)"],env=reconnect_env,check=True,timeout=90)
- if os.environ.get("OWC_BROWSER_SETUP_TEST") == "1":
+ if os.environ.get("OWC_BROWSER_SETUP_TEST") == "1" or os.environ.get("OWC_BROWSER_SETUP_ONLY") == "1":
   browser_env=os.environ.copy();browser_env["OWC_TEST_OBS_PORT"]="4457"
   subprocess.run(["python3","scripts/browser-smoke.py"],env=browser_env,check=True,timeout=90)
 finally:

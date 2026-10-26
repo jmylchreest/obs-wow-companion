@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "platform": "Linux X11, private OBS profile",
+  "scenario": "Backdated start/end delivered after OBS has closed its recording",
+  "coverage": "complete",
+  "duration_ms": 7080,
+  "audio_tracks": 2,
+  "export": {
+    "encoder": "libx264",
+    "fallback": "Preferred export failed; used CPU: export duration differs from requested range"
+  },
+  "evidence_directory": "/tmp/owc-obs-j6n5mv8q",
+  "recording_state_changed_during_recovery": false,
+  "scope": "Native synthetic-source Linux recovery; Windows counterpart remains pending"
+}

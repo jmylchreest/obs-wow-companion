@@ -142,6 +142,8 @@ impl Client {
                 tokio::select! {
                     request=rx.recv()=>{
                         let Some(r)=request else {break "client closed".into()};
+                        // A timed-out caller must not trigger a mutation later from the queue.
+                        if r.reply.is_closed() {continue;}
                         if pending.len()>=32 {let _=r.reply.send(Err(Error::Protocol("request queue full".into())));continue;}
                         serial+=1;let id=serial.to_string();
                         let msg=json!({"op":6,"d":{"requestType":r.kind,"requestId":id,"requestData":r.data}});
@@ -344,6 +346,52 @@ mod tests {
             Event::Disconnected(_)
         ));
         server.await.expect("server");
+    }
+
+    #[tokio::test]
+    async fn cancelled_queued_mutation_is_not_sent_to_obs() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listen");
+        let port = listener.local_addr().expect("address").port();
+        let server = tokio::spawn(async move {
+            let mut socket = accept_identified(listener).await;
+            let frame = socket.next().await.expect("request").expect("frame");
+            let request: Value =
+                serde_json::from_str(frame.to_text().expect("text")).expect("request JSON");
+            let kind = request["d"]["requestType"].clone();
+            socket
+                .send(Message::Text(
+                    json!({"op":7,"d":{
+                        "requestId":request["d"]["requestId"],
+                        "requestStatus":{"result":true,"code":100},
+                        "responseData":{"outputActive":false}
+                    }})
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .expect("reply");
+            kind
+        });
+        let client = Client::connect(port, "").await.expect("connect");
+        let (reply, cancelled) = oneshot::channel();
+        drop(cancelled);
+        client
+            .tx
+            .send(Request {
+                kind: "StartRecord".into(),
+                data: json!({}),
+                reply,
+            })
+            .await
+            .expect("queue cancelled command");
+        let result = client.request("GetRecordStatus", json!({})).await;
+        assert_eq!(server.await.expect("server"), "GetRecordStatus");
+        assert_eq!(
+            result.expect("reconciliation response")["outputActive"],
+            false
+        );
     }
 
     #[tokio::test]

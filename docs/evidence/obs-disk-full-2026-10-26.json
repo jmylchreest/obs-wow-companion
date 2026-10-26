@@ -1,0 +1,16 @@
+{
+  "closed_source_unchanged": true,
+  "restart_after_space_released": true,
+  "retained_files": 2,
+  "scope": "Private Linux OBS tmpfs; no claim of corrupted-file decodeability",
+  "stop_event": {
+    "outputActive": false,
+    "outputPath": "/tmp/owc-obs-full-gcv_0jit/limited/2026-10-26 19-26-59.mkv",
+    "outputState": "OBS_WEBSOCKET_OUTPUT_STOPPED"
+  },
+  "date": "2026-10-26",
+  "obs_version": "32.2.2",
+  "websocket_version": "5.7.4",
+  "filesystem": "Private 128 MiB tmpfs in user/mount namespace",
+  "evidence_directory": "/tmp/owc-obs-full-gcv_0jit"
+}

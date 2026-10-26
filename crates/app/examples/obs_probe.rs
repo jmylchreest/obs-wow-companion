@@ -38,6 +38,12 @@ async fn main() -> Result<()> {
         owc_obs_client::probe(4457).await?,
         "OBS authentication discovery"
     );
+    if std::env::var("OWC_BROWSER_SETUP_ONLY").as_deref() == Ok("1") {
+        return Ok(());
+    }
+    if let Ok(limited) = std::env::var("OWC_NATIVE_OBS_LIMITED") {
+        return verify_disk_full(&client, std::path::Path::new(&limited)).await;
+    }
     let mut setup_config = owc_app::config::Config::new(std::path::Path::new(&root));
     setup_config.spool = root.clone().into();
     let setup =
@@ -83,6 +89,100 @@ async fn main() -> Result<()> {
     // Allow the frontend to complete its queued stop handler before a new session.
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     verify_engine(std::path::Path::new(&root)).await?;
+    Ok(())
+}
+
+async fn verify_disk_full(client: &Client, limited: &std::path::Path) -> Result<()> {
+    use std::io::Write;
+    use std::time::Duration;
+    client
+        .request("SetRecordDirectory", json!({"recordDirectory":limited}))
+        .await?;
+    client.request("StartRecord", json!({})).await?;
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    let previous = client.request("StopRecord", json!({})).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let closed = std::path::PathBuf::from(previous["outputPath"].as_str().context("closed path")?);
+    let original = std::fs::read(&closed)?;
+    anyhow::ensure!(!original.is_empty(), "baseline footage empty");
+    let mut events = client.subscribe();
+    client.request("StartRecord", json!({})).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    anyhow::ensure!(
+        client.output_active("GetRecordStatus").await?,
+        "did not start"
+    );
+    let filler = limited.join("private-filler");
+    let mut file = std::fs::File::create(&filler)?;
+    let block = vec![0_u8; 256 * 1024];
+    loop {
+        if let Err(error) = file.write_all(&block) {
+            anyhow::ensure!(error.raw_os_error() == Some(28), "not ENOSPC: {error}");
+            break;
+        }
+    }
+    drop(file);
+    let stopped = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            if let owc_obs_client::Event::Obs { kind, data, .. } = events.recv().await?
+                && kind == "RecordStateChanged"
+                && data["outputState"] == "OBS_WEBSOCKET_OUTPUT_STOPPED"
+            {
+                return Ok::<_, anyhow::Error>(data);
+            }
+        }
+    })
+    .await??;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while client.output_active("GetRecordStatus").await? {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        Ok::<_, anyhow::Error>(())
+    })
+    .await??;
+    let files: Vec<_> = std::fs::read_dir(limited)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "mkv"))
+        .collect();
+    anyhow::ensure!(!files.is_empty(), "failed recording disappeared");
+    anyhow::ensure!(
+        std::fs::read(&closed)? == original,
+        "closed footage changed"
+    );
+    std::fs::remove_file(filler)?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    client.request("StartRecord", json!({})).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    anyhow::ensure!(
+        client.output_active("GetRecordStatus").await?,
+        "retry did not start"
+    );
+    client.request("StopRecord", json!({})).await?;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while client.output_active("GetRecordStatus").await? {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        Ok::<_, anyhow::Error>(())
+    })
+    .await??;
+    for path in &files {
+        anyhow::ensure!(path.exists(), "retry removed original footage");
+    }
+    anyhow::ensure!(
+        std::fs::read(&closed)? == original,
+        "retry changed closed footage"
+    );
+    let report = json!({"stop_event":stopped,"retained_files":files.len(),"closed_source_unchanged":true,
+        "restart_after_space_released":true,"scope":"Private Linux OBS tmpfs; no claim of corrupted-file decodeability"});
+    std::fs::write(
+        limited
+            .parent()
+            .context("report parent")?
+            .join("obs-disk-full.json"),
+        serde_json::to_vec_pretty(&report)?,
+    )?;
+    tracing::info!("Native OBS ENOSPC stopped output, preserved files and allowed retry");
     Ok(())
 }
 
@@ -149,10 +249,7 @@ async fn verify_engine(spool: &std::path::Path) -> Result<()> {
     tokio::time::sleep(Duration::from_secs(4)).await;
     send(&tx, json!({"action":"manual_start"})).await?;
     append_event(&logs, "ENCOUNTER_START,2001,Mid-dungeon boss,8,5")?;
-    append_event(
-        &logs,
-        "UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,Player-1-TEST,Test player,0x511,0x0,0",
-    )?;
+    calibrate_death(&scene_client, &logs, &root).await?;
     append_event(&logs, "ENCOUNTER_END,2001,Mid-dungeon boss,8,5,1")?;
     append_event(&logs, "ENCOUNTER_START,1001,Integration boss,16,20")?;
     tokio::time::sleep(Duration::from_secs(4)).await;
@@ -197,6 +294,33 @@ async fn verify_engine(spool: &std::path::Path) -> Result<()> {
     let state = status.borrow().clone();
     task.abort();
     anyhow::bail!("companion did not produce clip: {state}")
+}
+
+async fn calibrate_death(
+    client: &Client,
+    logs: &std::path::Path,
+    root: &std::path::Path,
+) -> Result<()> {
+    let sent = std::time::Instant::now();
+    let media = client
+        .request("GetMediaInputStatus", json!({"inputName":"Test pattern"}))
+        .await?;
+    let at = chrono::Local::now();
+    let round_trip_ms = sent.elapsed().as_millis();
+    anyhow::ensure!(round_trip_ms < 250, "calibration request too slow");
+    append_event_at(
+        logs,
+        "UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,Player-1-TEST,Test player,0x511,0x0,0",
+        at,
+    )?;
+    std::fs::write(
+        root.join("marker-reference.json"),
+        serde_json::to_vec_pretty(&json!({
+            "event_ms":at.timestamp_millis(), "source_cursor_ms":media["mediaCursor"],
+            "source_duration_ms":media["mediaDuration"], "request_round_trip_ms":round_trip_ms
+        }))?,
+    )?;
+    Ok(())
 }
 
 fn verify_manual_markers(state: &serde_json::Value) -> Result<()> {
@@ -514,6 +638,80 @@ async fn verify_shutdown(
     anyhow::bail!("shutdown did not settle: {}", *status.borrow())
 }
 
+async fn verify_closed_history(
+    status: &tokio::sync::watch::Receiver<serde_json::Value>,
+    logs: &std::path::Path,
+    root: &std::path::Path,
+) -> Result<()> {
+    let previous: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("delayed-start.json"))?)?;
+    let start_ms = previous["activity"]["start_ms"]
+        .as_i64()
+        .context("earlier start")?
+        + 2000;
+    let start = chrono::DateTime::from_timestamp_millis(start_ms)
+        .context("fixture time")?
+        .with_timezone(&chrono::Local);
+    let monitor = Client::connect(4457, "owc-isolated-test").await?;
+    let mut events = monitor.subscribe();
+    anyhow::ensure!(
+        status.borrow()["ownership"] == "idle",
+        "capture must be closed"
+    );
+    append_event_at(
+        logs,
+        "ENCOUNTER_START,1006,Closed history boss,16,20",
+        start,
+    )?;
+    append_event_at(
+        logs,
+        "ENCOUNTER_END,1006,Closed history boss,16,20,1",
+        start + chrono::Duration::seconds(5),
+    )?;
+    for _ in 0..160 {
+        let state = status.borrow().clone();
+        anyhow::ensure!(state["armed"] == false, "historical event armed capture");
+        while let Ok(event) = events.try_recv() {
+            if let owc_obs_client::Event::Obs { kind, .. } = event {
+                anyhow::ensure!(
+                    kind != "RecordStateChanged",
+                    "historical event changed OBS recording"
+                );
+            }
+        }
+        if let Some(activity) = state["activities"].as_array().and_then(|items| {
+            items
+                .iter()
+                .find(|a| a["name"] == "Closed history boss" && a["status"] == "ready")
+        }) {
+            let path =
+                std::path::PathBuf::from(activity["path"].as_str().context("recovered path")?);
+            let sidecar: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path.with_extension("json"))?)?;
+            anyhow::ensure!(
+                sidecar["plan"]["coverage"] == "complete",
+                "closed history coverage: {sidecar}"
+            );
+            anyhow::ensure!(
+                sidecar["media"]["audio_tracks"] == 2,
+                "closed history lost audio tracks"
+            );
+            anyhow::ensure!(
+                monitor.request("GetRecordStatus", json!({})).await?["outputActive"] == false,
+                "historical recovery started OBS"
+            );
+            std::fs::write(
+                root.join("closed-history.json"),
+                serde_json::to_vec_pretty(&sidecar)?,
+            )?;
+            tracing::info!("Closed OBS history recovered without restarting capture");
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    anyhow::bail!("closed history did not recover: {}", *status.borrow())
+}
+
 async fn verify_delayed_capture(
     status: &tokio::sync::watch::Receiver<serde_json::Value>,
     logs: &std::path::Path,
@@ -522,6 +720,7 @@ async fn verify_delayed_capture(
     for truncated in [false, true] {
         verify_delayed_case(status, logs, root, truncated).await?;
     }
+    verify_closed_history(status, logs, root).await?;
     Ok(())
 }
 

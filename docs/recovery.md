@@ -2,9 +2,9 @@
 
 ## Recording ownership
 
-Arming while OBS is idle starts a managed recording in the dedicated spool. Ownership becomes confirmed only after OBS reports recording started. The companion can split or stop only a recording it still owns.
+Starting automatic or manual capture while OBS is idle creates a managed recording in the dedicated spool. Ownership becomes confirmed only after OBS reports recording started. The companion can split or stop only a recording it still owns.
 
-Connecting to an existing recording uses observe mode. The companion does not stop, split or pause it. Clips may wait for that file to close. Pausing, changing profiles, losing events or disconnecting makes timing/ownership uncertain; automatic extraction is withheld where continuity cannot be established. Stop the recording yourself in OBS, reconnect, then arm a new session.
+Connecting to an existing recording uses observe mode. The companion does not stop, split or pause it. Clips may wait for that file to close. Pausing, changing profiles, losing events or disconnecting makes timing/ownership uncertain; automatic extraction is withheld where continuity cannot be established. Stop the recording yourself in OBS, reconnect, then start a new recording.
 
 The companion never sends streaming controls. Setup shows OBS rendering/output skipped-frame counters so capture load is visible. Investigate overload in OBS and lower recording load if needed.
 
@@ -16,6 +16,10 @@ Only registered managed source segments inside the dedicated spool are automatic
 
 Protection prevents deletion; favourites are a searchable `favourite` tag and do not themselves prevent deletion. Storage limits are best-effort working limits: long encounters, protected recordings and temporary exports can exceed them. Low space stops a clearly owned recording while preserving pinned footage. External OBS recordings are never deleted.
 
+If OBS itself runs out of disk space, it may show an error dialog. Free space before
+trying again. Previously closed footage is retained, but the interrupted file may
+be empty or incomplete and cannot be promised recoverable.
+
 ## Restart and failed jobs
 
 Export plans and precise/fast mode are durable. An interrupted export becomes pending after restart, and a validated published file is reused rather than creating a duplicate. Failed jobs retain their sources; use Retry after fixing permissions, free space or FFmpeg configuration.
@@ -26,9 +30,9 @@ System clock changes invalidate the current timeline. Ambiguous local log timest
 
 ## Playback
 
-Original MKV exports retain every recorded audio stream. Playback prepares a separate H.264/AAC MP4 for the chosen track, leaving the original intact. Automatic encounter exports default to fast copying; fast cuts expand to the preceding keyframe and store that adjusted timeline origin. Explicit range exports remain precise. Closed, continuous retained footage can prepare playback before final export validation completes, without replacing playback when the saved clip becomes ready.
+Original MKV exports retain every recorded audio stream. Playback uses the original where supported, otherwise preparing a compatible H.264/AAC MP4 for the chosen track and leaving the original intact. Automatic encounter exports default to fast copying; fast cuts expand to the preceding keyframe and store that adjusted timeline origin. Explicit range exports remain precise. Closed, continuous retained footage can prepare playback before final export validation completes, without replacing playback when the saved clip becomes ready.
 
-Use **M** in the app to start/end a manual interval while armed, and **Space** to play/pause. Shortcuts do not run while editing form controls. Closing the native window requests Quit. Quit is blocked while capture or an export is active; pause capture and wait for exports first. Startup is opt-in, and automatic capture starts on a fresh supported encounter once OBS is connected and setup is ready.
+Use **M** in the app to start/end a manual interval while capture is active, and **Space** to play/pause. Shortcuts do not run while editing form controls. Closing the native window requests Quit, which stops owned recording and saves unfinished work for restart. You do not need to pause or wait for exports. Startup is opt-in, and automatic capture starts on a fresh supported encounter once OBS is connected and setup is ready.
 
 ## Metadata reconciliation and remaining limits
 

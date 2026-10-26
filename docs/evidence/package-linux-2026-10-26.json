@@ -1,17 +1,17 @@
 {
   "date": "2026-10-26",
-  "commit": "b247956",
+  "commit": "804cd59",
   "target": "x86_64-unknown-linux-gnu",
   "version": "0.1.0-dev.1",
   "archive": "owc-app-x86_64-unknown-linux-gnu.tar.xz",
-  "bytes": 4950460,
-  "sha256": "99b084b5fa238682d29b12b23168045f999e5f23be5be879685bde54b4d65efc",
+  "bytes": 4951276,
+  "sha256": "091524dec10f0fd2e88a780bd8275dc6a4eda4c5a0875c7b4debdd69bf740784",
   "checks": {
     "archive_checksum_required_files_version": "passed",
-    "service_authentication_two_track_media_shutdown": "/tmp/owc-service-yk6_0mo4",
-    "native_window_close": "/tmp/owc-desktop-lojsysdk",
-    "process_crash_orphan_isolation": "/tmp/owc-recovery-wgvyaaax",
-    "webkit_playback_and_ui": "/tmp/owc-browser-hk7eknk2"
+    "service_authentication_two_track_media_shutdown": "/tmp/owc-service-pajaj10c",
+    "native_window_close": "/tmp/owc-desktop-j0m1k51r",
+    "process_crash_orphan_isolation": "/tmp/owc-recovery-nkfpmo_s",
+    "webkit_playback_and_ui": "/tmp/owc-browser-a8k3ch1g"
   },
   "scope": "Local Linux host with installed GTK/WebKit/FFmpeg; not a clean-machine or Windows qualification"
 }

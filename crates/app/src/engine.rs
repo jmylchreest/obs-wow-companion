@@ -258,7 +258,7 @@ impl Engine {
         }
         Ok(())
     }
-    fn snapshot(&self) -> Result<Value> {
+    pub(crate) fn snapshot(&self) -> Result<Value> {
         let segments = self.db.segments()?;
         let mut activities = self.db.list()?;
         for activity in &mut activities {
@@ -672,15 +672,19 @@ impl Engine {
             .retain(|pending| pending.id != activity.id);
         let tracked = self.automatic_activities.remove(&activity.id);
         let interrupted = self.interrupted_activities.remove(&activity.id);
-        if tracked || interrupted || (self.armed && !self.automatic_session) {
-            if interrupted || !self.armed {
+        // A delayed completion can arrive after capture has stopped, or while
+        // OBS is unavailable. Keep its metadata so the planner can recover closed
+        // footage (or report unavailable), without acquiring capture ownership.
+        let retain_metadata = self.setup_completed && !self.automatic_paused;
+        if tracked || interrupted || retain_metadata || (self.armed && !self.automatic_session) {
+            if interrupted || (tracked && !self.armed) {
                 activity.warnings.push(
                     "Recording was interrupted before the encounter finished; footage may be incomplete or unavailable.".into(),
                 );
             }
             self.completed_events.push(activity);
         }
-        if self.automatic_session && self.automatic_activities.is_empty() {
+        if tracked && self.automatic_session && self.automatic_activities.is_empty() {
             self.automatic_stop =
                 Some(Instant::now() + Duration::from_secs(u64::from(self.config.post_seconds)));
         }
@@ -843,6 +847,7 @@ impl Engine {
                 flavour: installation.flavour,
                 logs_directory: installation.logs,
                 log_file: self.logs[&installation.id.to_string()].last_source.clone(),
+                line: None,
             },
             event: ActivityEvent::Abandoned {
                 activity,
@@ -3029,6 +3034,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delayed_completion_recovers_closed_history_without_controlling_obs() {
+        let root = tempfile::tempdir().expect("root");
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().to_owned(), tx, status).expect("engine");
+        let now = Engine::now();
+        let mut activity = Activity::new(Kind::Raid, "Delayed".into(), now - 60_000, "Retail");
+        activity.finish(now - 20_000, Outcome::Success);
+        engine.activity_finished(activity.clone());
+        assert!(engine.completed_events.is_empty(), "setup is required");
+        engine.setup_completed = true;
+        engine.automatic_paused = true;
+        engine.activity_finished(activity.clone());
+        assert!(
+            engine.completed_events.is_empty(),
+            "respect automatic pause"
+        );
+        engine.automatic_paused = false;
+        engine
+            .activity_started(activity.clone())
+            .await
+            .expect("offline start");
+        assert!(!engine.armed);
+        assert!(engine.automatic_activities.is_empty());
+        // An unrelated delayed completion must not postpone another capture's stop.
+        engine.automatic_session = true;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        engine.automatic_stop = Some(deadline);
+        engine.activity_finished(activity.clone());
+        assert_eq!(engine.automatic_stop, Some(deadline));
+        engine.automatic_session = false;
+        engine.automatic_stop = None;
+        engine.commit_logs(&Value::Null, &[]).expect("checkpoint");
+        let saved = engine
+            .db
+            .activity(&activity.id.to_string())
+            .expect("saved activity");
+        assert!(
+            saved.warnings.is_empty(),
+            "normal closure is not interruption"
+        );
+        let segment = Segment {
+            id: Uuid::new_v4(),
+            session: Uuid::new_v4(),
+            path: root.path().join("retained.mkv"),
+            start_ms: now - 70_000,
+            end_ms: now - 10_000,
+            closed: true,
+            managed: true,
+        };
+        assert_eq!(
+            plan_clip(&saved, &[segment], 5_000, 5_000).coverage,
+            Coverage::Complete
+        );
+        // With no retained files the normal scheduler publishes an honest state.
+        engine.tick().await.expect("schedule unavailable encounter");
+        let records = engine.db.list().expect("library");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["status"], "unavailable");
+        assert!(!engine.armed);
+        assert!(engine.recording.is_none());
+        assert!(engine.deferred_starts.is_empty());
+    }
+
+    #[tokio::test]
     async fn completed_encounter_survives_loss_of_capture() {
         let root = tempfile::tempdir().expect("root");
         let (tx, _) = mpsc::channel(32);
@@ -3187,6 +3257,7 @@ mod tests {
                             flavour: installation.flavour,
                             logs_directory: installation.logs.clone(),
                             log_file: None,
+                            line: None,
                         },
                         event: ActivityEvent::Marker(owc_domain::Marker {
                             recent_hits: vec![],

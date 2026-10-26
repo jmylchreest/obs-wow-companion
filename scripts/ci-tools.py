@@ -138,7 +138,9 @@ def evidence():
             if prefix == "owc-obs-":
                 candidates.extend(root / name for name in [
                     "companion/evidence.json", "companion/delayed-start.json",
-                    "companion/partial-start.json", "companion/queue-latency.json",
+                    "companion/partial-start.json", "companion/closed-history.json",
+                    "companion/queue-latency.json", "companion/marker-reference.json",
+                    "companion/marker-alignment.json",
                     "companion/events.jsonl", "videos/readiness.json",
                 ])
             for source in candidates:

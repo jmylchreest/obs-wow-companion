@@ -1,0 +1,47 @@
+{
+  "event_ms": 1793041331324,
+  "request_round_trip_ms": 0,
+  "source_cursor_ms": 2000,
+  "source_duration_ms": 12000,
+  "matched_source_ms": 1866.6666666666667,
+  "marker_offset_seconds": 1.914,
+  "alignment_error_ms": 133.33333333333326,
+  "mean_pixel_error": 7.807407407407408,
+  "method": "Minimum RGB frame error against the 30fps looping source",
+  "scope": "Private Linux OBS synthetic scene; not gameplay or Windows qualification",
+  "date": "2026-10-26",
+  "evidence_directory": "/tmp/owc-obs-pgpfocht",
+  "negative_control": "Three-second shifted reference correctly rejected",
+  "blank_control": "Blank recording correctly rejected by picture-match threshold",
+  "video_split_boundaries": [
+    {
+      "last_source_frame": 117,
+      "first_source_frame": 118,
+      "frame_step": 1,
+      "last_pixel_error": 7.729814814814815,
+      "first_pixel_error": 7.754722222222222
+    }
+  ],
+  "combined_rerun": {
+    "evidence_directory": "/tmp/owc-obs-rg6iaidc",
+    "event_ms": 1793042209558,
+    "request_round_trip_ms": 0,
+    "source_cursor_ms": 1966,
+    "source_duration_ms": 12000,
+    "matched_source_ms": 1833.3333333333333,
+    "marker_offset_seconds": 1.914,
+    "alignment_error_ms": 132.66666666666674,
+    "mean_pixel_error": 7.7689814814814815,
+    "method": "Minimum RGB frame error against the 30fps looping source",
+    "scope": "Private Linux OBS synthetic scene; not gameplay or Windows qualification",
+    "video_split_boundaries": [
+      {
+        "last_source_frame": 116,
+        "first_source_frame": 117,
+        "frame_step": 1,
+        "last_pixel_error": 7.652685185185185,
+        "first_pixel_error": 7.691851851851852
+      }
+    ]
+  }
+}

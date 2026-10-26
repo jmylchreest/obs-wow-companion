@@ -292,6 +292,57 @@ mod tests {
     }
 
     #[test]
+    fn locked_checkpoint_is_bounded_and_retries_without_losing_activity() {
+        let root = tempfile::tempdir().expect("temp");
+        let path = root.path().join("library.sqlite");
+        let mut db = Library::open(&path).expect("open");
+        db.checkpoint("logs", &serde_json::json!({"offset":10}), &[])
+            .expect("initial cursor");
+        let other = Connection::open(&path).expect("competing connection");
+        other.execute_batch("BEGIN IMMEDIATE").expect("writer lock");
+        let activity = Activity::new(Kind::Manual, "Pending".into(), 0, "manual");
+        let started = std::time::Instant::now();
+        let error = db
+            .checkpoint(
+                "logs",
+                &serde_json::json!({"offset":20}),
+                std::slice::from_ref(&activity),
+            )
+            .expect_err("locked writer");
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        assert!(
+            matches!(error.downcast_ref::<rusqlite::Error>(),
+            Some(rusqlite::Error::SqliteFailure(error, _)) if error.code == rusqlite::ErrorCode::DatabaseBusy),
+            "{error:#}"
+        );
+        assert_eq!(
+            db.setting("logs").expect("unchanged cursor"),
+            Some(serde_json::json!({"offset":10}))
+        );
+        assert!(db.list().expect("no partial activity").is_empty());
+        other.execute_batch("ROLLBACK").expect("release lock");
+        db.checkpoint(
+            "logs",
+            &serde_json::json!({"offset":20}),
+            std::slice::from_ref(&activity),
+        )
+        .expect("retry retained batch");
+        drop(db);
+        let db = Library::open(&path).expect("reopen");
+        assert_eq!(
+            db.setting("logs").expect("durable cursor"),
+            Some(serde_json::json!({"offset":20}))
+        );
+        assert_eq!(db.list().expect("exactly one activity").len(), 1);
+        assert_eq!(
+            db.activity(&activity.id.to_string())
+                .expect("durable activity")
+                .name,
+            "Pending"
+        );
+    }
+
+    #[test]
     fn latest_bundle_survives_restart_replaces_previous_and_cascades_on_delete() {
         let root = tempfile::tempdir().expect("temp");
         let path = root.path().join("library.sqlite");
@@ -404,13 +455,26 @@ mod tests {
             .expect("checkpoint");
         db.annotate(&a.id.to_string(), true, &["keep".into()])
             .expect("tag");
+        let clip = dir.path().join("clip.mkv");
+        db.begin_export(&owc_domain::plan_clip(&a, &[], 0, 0), &clip, true)
+            .expect("export job");
+        db.finish_export(&a.id.to_string(), 2).expect("published");
         assert!(db.delete(&a.id.to_string()).is_err());
         drop(db);
-        let db = Library::open(&path).expect("reopen");
+        let mut db = Library::open(&path).expect("reopen");
+        db.checkpoint("cursor", &serde_json::json!({"offset":17}), &[a])
+            .expect("replayed completion");
         assert_eq!(
             db.setting("cursor").expect("setting").expect("present")["offset"],
             17
         );
-        assert_eq!(db.list().expect("list")[0]["protected"], true);
+        let records = db.list().expect("list");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["protected"], true);
+        assert_eq!(records[0]["tags"], serde_json::json!(["keep"]));
+        assert_eq!(records[0]["status"], "ready");
+        assert_eq!(records[0]["path"], clip.to_string_lossy().as_ref());
+        assert_eq!(records[0]["audio_tracks"], 2);
+        assert!(db.pending().expect("queue").is_empty());
     }
 }

@@ -183,12 +183,19 @@ try:
     assert js("return document.getElementById('setup-wizard').open") is False
     click('#library-tab')
     assert js("const w=document.getElementById('recording-workspace'),l=document.getElementById('recordings-pane'),r=w.querySelector('.review');return Math.abs(r.getBoundingClientRect().left-l.getBoundingClientRect().right-1)<1&&getComputedStyle(r).borderLeftWidth==='0px'") is True
+    # A previously hidden workspace gets its restored width in ResizeObserver.
+    # Measure only after that layout pass, otherwise the pointer can miss the divider.
+    for _ in range(50):
+        if js("return Math.abs(document.getElementById('recordings-pane').getBoundingClientRect().width-Math.min(libraryWidth,maximumLibraryWidth()))<1"): break
+        time.sleep(0.05)
+    assert js("return Math.abs(document.getElementById('recordings-pane').getBoundingClientRect().width-Math.min(libraryWidth,maximumLibraryWidth()))<1") is True
+    js("window.paneDragEvents=[];for(const type of ['pointerdown','pointermove','pointerup','lostpointercapture'])document.getElementById('pane-divider').addEventListener(type,e=>paneDragEvents.push({type:e.type,x:e.clientX,id:e.pointerId}))")
     geometry=js("const r=document.getElementById('pane-divider').getBoundingClientRect();return {x:r.x,y:r.y+100,to:r.x+70}")
     driver(prefix+'/actions',{'actions':[{'type':'pointer','id':'pane-mouse','parameters':{'pointerType':'mouse'},'actions':[{'type':'pointerMove','duration':0,'x':round(geometry['x']),'y':round(geometry['y'])},{'type':'pointerDown','button':0},{'type':'pointerMove','duration':250,'x':round(geometry['to']),'y':round(geometry['y'])},{'type':'pointerUp','button':0}]}]})
     for _ in range(50):
         time.sleep(0.1)
         if js("return state.config.recordings_width>370"): break
-    assert js("return state.config.recordings_width>370") is True
+    assert js("return state.config.recordings_width>370") is True, js("return {events:paneDragEvents,width:libraryWidth,saved:state.config.recordings_width,uiError:document.getElementById('error').textContent}")
     click('#collapse-recordings')
     for _ in range(50):
         time.sleep(0.1)
@@ -275,6 +282,8 @@ try:
         time.sleep(0.1)
         if js("return !reviewPlayer.paused()&&reviewPlayer.currentTime()>0"): break
     assert js("return !reviewPlayer.paused()&&document.getElementById('toggle-play').title==='Pause'") is True
+    # Keep live OBS snapshots from replacing deliberately synthetic render states.
+    js("window.holdFixtureUpdates=e=>{window.heldFixtureState=JSON.parse(e.data);e.stopImmediatePropagation()};updates.addEventListener('state',holdFixtureUpdates,true)")
     js("window.readySnapshot=structuredClone(state);state.activities.find(a=>a.id===selected).status='pending';state.preview=null;choose(recordingById(selected),true)")
     assert js("return !reviewPlayer.currentSrc()") is True
     assert js("return !reviewPlayer.controls()&&getComputedStyle(document.querySelector('.vjs-big-play-button')).display==='none'&&getComputedStyle(document.querySelector('.vjs-control-bar')).display==='none'") is True
@@ -317,6 +326,7 @@ try:
     click('#toggle-play')
     assert js("return reviewPlayer.paused()&&document.getElementById('toggle-play').title==='Play'") is True
 
+    js("updates.removeEventListener('state',holdFixtureUpdates,true);if(window.heldFixtureState)renderState(window.heldFixtureState)")
     assert js("return !document.querySelector('[data-event-kind=activity_end]')") is True
     assert js("const source=reviewPlayer.currentSrc();choose(reviewActivity());return source===reviewPlayer.currentSrc()") is True
     assert js("return document.getElementById('error').hidden") is True

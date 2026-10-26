@@ -1,0 +1,16 @@
+{
+  "batches": 10,
+  "completed": 1,
+  "deaths": 100,
+  "elapsed_seconds": 0.60569913,
+  "fixture_bytes": 10197039,
+  "fixture_lines": 100002,
+  "lines_per_second": 165101.77255826668,
+  "max_waiting_batches": 0,
+  "reference_events_per_second": 1000,
+  "represented_seconds": 100,
+  "sampled_combat_markers": 100,
+  "starts": 1,
+  "target_multiplier": 10,
+  "scope": "Local release-profile synthetic watcher/bus/checkpoint benchmark with source-line provenance; not gameplay load"
+}

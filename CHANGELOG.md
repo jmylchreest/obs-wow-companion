@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- Bound Linux CI dependency installation and avoid optional recommended packages after a slow mirror exhausted the packaging job.
+
+- Discard cancelled OBS requests before sending them, preventing an expired queued recording command from executing later.
+
+- Publish complete initial UI/API state before opening the window, fixing a Windows startup race while OBS reconnects.
+
+- Retain delayed encounter completions after OBS stops or disconnects, recovering closed footage where available and showing unavailable metadata otherwise. Unrelated delayed events no longer postpone an owned recording's stop.
+
 - Preserve source timestamp precision during precise exports, avoiding a lost frame at each fragment boundary with FFmpeg 6.
 - Read and write validation files explicitly as UTF-8 on Windows.
 
@@ -31,6 +39,8 @@
 - Retain combat-log checkpoint acknowledgements after database write failures and retry automatically, saving pending encounters with the cursor before allowing watchers to advance.
 
 ### Added
+
+- Attach raw log timestamps, normalized event times, receipt times, file identities and exact byte offsets to emitted log events for timing diagnostics.
 
 - Run interrupted-export recovery checks on Windows as well as Linux, waiting for orphan workers to finish before validating the recovered clip.
 

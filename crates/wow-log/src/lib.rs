@@ -468,6 +468,8 @@ pub struct Tailer {
 pub struct SourceLine {
     pub path: PathBuf,
     pub text: String,
+    pub identity: String,
+    pub offset: u64,
 }
 impl Tailer {
     /// Bounded to 1 MiB per file per poll. Cursor advances only as bytes are read.
@@ -542,12 +544,21 @@ impl Tailer {
             self.has_backlog |= state.offset < meta.len();
             state.pending.extend(bytes);
             if let Some(last) = state.pending.iter().rposition(|b| *b == b'\n') {
+                let mut offset = state.offset - state.pending.len() as u64;
                 let complete = state.pending.drain(..=last).collect::<Vec<_>>();
-                for raw in complete.split(|b| *b == b'\n').filter(|b| !b.is_empty()) {
+                for raw in complete.split_inclusive(|b| *b == b'\n') {
+                    let line_offset = offset;
+                    offset += raw.len() as u64;
+                    let raw = raw.strip_suffix(b"\n").unwrap_or(raw);
+                    if raw.is_empty() {
+                        continue;
+                    }
                     if let Ok(line) = std::str::from_utf8(raw) {
                         lines.push(SourceLine {
                             path: path.clone(),
                             text: line.trim_end().into(),
+                            identity: state.identity.clone(),
+                            offset: line_offset,
                         });
                     }
                 }
@@ -565,6 +576,34 @@ impl Tailer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_offsets_survive_partial_utf8_and_checkpoint() {
+        let dir = tempfile::tempdir().expect("directory");
+        let path = dir.path().join("WoWCombatLog-offsets.txt");
+        fs::write(&path, b"").expect("create");
+        let mut tailer = Tailer::default();
+        tailer.poll_sources(dir.path()).expect("initialize");
+        let first = "évent\r\n";
+        let bytes = [b"\n".as_slice(), first.as_bytes(), b"second\n"].concat();
+        fs::write(&path, &bytes[..2]).expect("partial UTF-8");
+        assert!(tailer.poll_sources(dir.path()).expect("partial").is_empty());
+        let saved = serde_json::to_vec(&tailer).expect("checkpoint");
+        let mut tailer: Tailer = serde_json::from_slice(&saved).expect("restore");
+        fs::write(&path, &bytes).expect("complete");
+        let lines = tailer.poll_sources(dir.path()).expect("lines");
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].text, "évent");
+        assert_eq!(lines[0].offset, 1);
+        assert_eq!(lines[1].offset, 1 + first.len() as u64);
+        assert_eq!(lines[1].text, "second");
+        assert!(!lines[0].identity.is_empty());
+        assert_eq!(lines[0].identity, lines[1].identity);
+        fs::write(&path, b"new\n").expect("truncate");
+        let lines = tailer.poll_sources(dir.path()).expect("truncated");
+        assert_eq!(lines[0].offset, 0);
+        assert_eq!(lines[0].text, "new");
+    }
+
     fn event(at: i64, text: &str) -> Event {
         Event {
             at,

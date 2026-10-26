@@ -698,3 +698,251 @@ preserved sources, distinct retry staging paths, one published clip and complete
 FFmpeg decode (`/tmp/owc-recovery-d8w_6v2q`). Workflow lint and seven release-policy
 tests pass. Native Windows execution remains pending; enabling a job is not
 runtime evidence.
+
+
+### 2026-10-26: Latest Linux candidate and hosted quality checks
+
+Rebuilt the Linux archive at `804cd59`, including the FFmpeg time-base fix.
+The extracted binary passes package contents/checksum/version, authenticated
+service and two-track media, native window-close, WebKit playback/UI, and the
+portable process-crash recovery check. Updated
+[package evidence](evidence/package-linux-2026-10-26.json) identifies the exact
+archive and private fixture directories. These are host checks, not clean-machine
+or Wayland qualification.
+
+The Ubuntu quality job in
+[run 40377435087](https://github.com/jmylchreest/obs-wow-companion/actions/runs/40377435087)
+at `89453f8` passed: 90 workspace tests, seven opt-in skips, the separate native
+credential-store round trip, formatting, strict Clippy, doctests, documentation
+and parser benchmark. The policy job also passed. Windows and subsequent package
+jobs were still pending when this evidence was recorded.
+
+
+### 2026-10-26: Both native quality jobs passed
+
+Run 40377435087 completed all Linux, Windows and policy quality jobs successfully.
+Windows reports 89 workspace tests passed with seven opt-in skips; its separate
+password-store test, strict Clippy, doctests and UTF-8 documentation validation
+also passed. Linux reports 90 workspace tests and its separate secure-store test.
+[Retained CI summary](evidence/quality-ci-2026-10-26.json) records exact job IDs and
+Windows test output. Both package jobs have started; installer and native UI
+qualification are not inferred from these quality results.
+
+
+### 2026-10-26: Completion recovery without an active OBS session
+
+The source audit found that an untracked delayed completion was discarded after
+capture stopped, even if closed segments could cover it. With setup complete and
+automatic recording enabled, supported filtered completions now enter the normal
+durable planner regardless of the current OBS connection. They can recover closed
+footage, or retain metadata with an explicit unavailable status when none exists.
+They do not start OBS, acquire ownership, or postpone another capture's stop.
+Pause and incomplete setup still suppress untracked completions.
+
+The regression checks durable metadata, complete planning from closed footage,
+unavailable scheduling without footage, pause/setup guards and an unchanged stop
+deadline. Full local nextest: 91 passed, seven opt-in skipped. Strict Rust 1.95
+application/all-target Clippy passes. Native OBS and remote platform reruns of
+this change remain pending; the earlier passing CI run predates it.
+
+
+### 2026-10-26: Native OBS closed-history recovery passed
+
+The expanded private OBS probe passed at `/tmp/owc-obs-j6n5mv8q`. After both
+full and partial delayed-capture cases completed and OBS became idle, it delivered
+a backdated five-second fight covered by earlier closed footage. The companion
+published a complete, playable two-track clip without arming capture or emitting
+any recording-state change. A final OBS status query confirmed it remained idle.
+[Measured evidence](evidence/closed-history-2026-10-26.json) records the result.
+The private probe also passed the prior capture, splitting, export and shutdown
+checks. Native Windows qualification remains pending.
+
+CI evidence collection now includes the closed-history sidecar. Strict Rust 1.95
+Clippy and all seven CI policy tests pass. The signing agent is reachable again
+but has no loaded identities, so this change is staged and not yet pushed.
+
+
+### 2026-10-26: Native Windows package exposed initial-state race
+
+Windows package job 121771335377 in run 40377435087 successfully built its MSVC
+archive, verified contents/checksum/version, and passed the extracted service's
+authentication, two-track media and shutdown checks. Native desktop verification
+then failed with `KeyError: connected`: the first status request received the
+partial `Starting` placeholder while the engine was reconnecting to OBS.
+
+The service now publishes the engine's complete initial snapshot synchronously
+before exposing its URL and starting HTTP service. The desktop assertion remains
+strict; it is not hidden behind a readiness sleep. The service smoke also checks
+the initial connection/configuration/library fields before sending an action.
+Local service and native desktop/window-close verification, plus Rust 1.95
+strict Clippy, pass. Desktop evidence is `/tmp/owc-desktop-5zeky07x`. Native Windows desktop
+and downstream package/installer reruns remain required. Evidence was downloaded
+to `/tmp/owc-windows-package-evidence`; the job log is retained separately.
+
+
+The library restart regression also replays a completed activity after publication:
+one ready row, output path, two-track metadata, protection and labels are preserved,
+and no duplicate export is queued. The focused repository test and formatting
+check pass; this supplements the delayed-completion recovery change.
+
+
+### 2026-10-26: Native marker/frame calibration
+
+The private OBS probe now samples the test source's playback cursor when it writes
+a death event. A separate FFmpeg/Python check decodes the published clip at that
+marker's offset and finds the closest frame in the original 30 fps source.
+RGB comparison accounts for the source BT.601 and profile BT.709 matrices; raw
+luma comparison initially failed the picture threshold despite a matching frame.
+The threshold was not relaxed. Source capture/export checks passed in
+`/tmp/owc-obs-pgpfocht`; the corrected comparison passes on that retained footage.
+
+[Measured result](evidence/marker-alignment-2026-10-26.json): 133.3 ms alignment
+error, mean RGB sample error 7.81/255, below the unchanged threshold of 12. A
+reference shifted by three seconds correctly fails the one-second alignment gate.
+A blank-video negative control also fails the picture-match threshold.
+This measures a synthetic Linux X11 scene, not real gameplay or Windows. It does
+not establish long-session split continuity. The expanded check and reports are
+wired into future isolated OBS CI runs.
+
+
+### 2026-10-26: Native video split-boundary measurement
+
+Extended frame matching to the last decoded frame of each retained fragment and
+the first frame of the next. In `/tmp/owc-obs-pgpfocht`, source frame 117 is followed
+by 118 across the manual clip's split: one consecutive 30 fps frame step, with
+RGB match errors below the unchanged picture threshold. The reusable native
+check now requires multiple fragments and checks their boundaries. The measured
+boundary is included in the marker-alignment evidence.
+
+A separate decoded-audio inspection found no silent 10 ms window between 3.9 and
+4.1 seconds in the published clip. This is not proof of sample-accurate audio
+continuity: AAC priming, packet offsets and long-session drift still require
+qualification. One short Linux boundary does not qualify every encoder/output
+combination or Windows.
+
+
+### 2026-10-26: Source-line timing provenance
+
+The log adapter now attaches the raw timestamp, normalized UTC event time,
+poll receipt time, file identity and exact line-start byte offset to emitted
+lifecycle/marker events. Synthetic timeout, restart and user actions have no
+fabricated line provenance. Byte positions account for blank lines, CRLF and
+partial UTF-8 across checkpoints and truncation. The UI's authenticated last-event
+snapshot exposes the structured source data; this does not claim that every raw
+combat event is archived or embedded in video sidecars.
+
+New regressions verify the delayed receipt independently of event time and preserve
+byte offsets after restart. Full workspace nextest passed 93 tests with seven
+opt-in skips after the helper extraction. The focused provenance regression and
+strict Rust 1.95 workspace/all-target Clippy also pass.
+
+The release-profile ingestion benchmark also passes with provenance enabled:
+100,002 lines (10,197,039 bytes) in 0.606 seconds, expected lifecycle/death counts,
+and no waiting batches. See [measured report](evidence/ingestion-provenance-2026-10-26.json).
+This is the existing synthetic reference, not a gameplay CPU guarantee.
+
+
+### 2026-10-26: Combined native rerun
+
+The current application and OBS probe were rebuilt after the provenance changes.
+The full native probe in `/tmp/owc-obs-rg6iaidc` passed manual and combat-log
+capture, two-track export, delayed complete/partial history recovery, recovery
+from already closed OBS files, and owned-recording shutdown. The integrated
+frame checker measured 132.7 ms marker alignment error and consecutive source
+frames 116 and 117 across the tested split. These repeat the short Linux
+synthetic checks; the remaining platform and long-session gates still apply.
+
+
+### 2026-10-26: Competing database writer
+
+A second SQLite connection holds `BEGIN IMMEDIATE` while the library attempts a
+combat-log checkpoint. The regression receives `DatabaseBusy` after the configured
+three-second bound, retains the previous cursor and creates no partial activity.
+After releasing the lock, retry persists the cursor and exactly one activity;
+reopening the database confirms both. The focused test passes in 3.00 seconds.
+This establishes bounded SQLite lock contention, not a bound on an unresponsive
+filesystem or device. The library's strict Rust 1.95 Clippy check also passes.
+
+Seven CI publication-policy tests pass against the current working tree. Their
+archive/installer fixture output does not qualify real platform release bundles.
+
+
+### 2026-10-26: Cancelled OBS command queue
+
+Source review found that the OBS actor could send a queued mutation after its
+reply receiver had been dropped by a timeout or cancelled caller. A socket-level
+regression first demonstrated a cancelled `StartRecord` reaching the peer ahead
+of `GetRecordStatus`. The actor now discards cancelled requests before sending.
+The same regression passes with only the status query reaching the peer.
+
+All seven OBS-client tests and strict Rust 1.95 all-target Clippy pass. This covers
+requests still waiting in the actor queue. A command already sent may have taken
+effect, so existing reconciliation and ownership guards remain necessary.
+
+
+### 2026-10-26: Combined recovery and OBS queue verification
+
+Workspace nextest run `0e513914-6bd6-458a-9cb6-4b820630b14e` passed all 95 tests
+with seven opt-in environment tests skipped. This includes the competing-database
+writer and cancelled OBS queue regressions alongside the provenance and delayed
+completion changes. Strict Rust 1.95 workspace/all-target Clippy also passed.
+Remote platform qualification still needs the current changes committed and run.
+
+
+### 2026-10-26: Native OBS disk exhaustion
+
+`python3 scripts/obs-disk-full-smoke.py` runs OBS with a private profile/display
+and a 128 MiB tmpfs inside an isolated user/mount namespace. It saves a baseline
+recording, starts another, and fills only that private filesystem until ENOSPC.
+OBS 32.2.2 emits stopped, settles to inactive, retains both file entries and leaves
+the closed baseline byte-for-byte unchanged. After removing the filler, recording
+starts and stops again without removing the originals. The successful probe is
+`/tmp/owc-obs-full-gcv_0jit`; see [report](evidence/obs-disk-full-2026-10-26.json).
+The namespace is unmounted after the run; its report remains on disk.
+
+The first run exposed a short delay between OBS's stopped event and its status
+query settling; the assertion now waits up to five seconds. Another run showed
+that the interrupted file can be empty because buffered bytes never reached disk.
+The test therefore requires preservation of already closed footage, not invented
+recoverability of interrupted output. OBS shows its insufficient-disk-space dialog.
+This qualifies the native OBS failure/retry path on Linux, not companion-controlled
+ENOSPC or Windows. Existing controller low-space and media ENOSPC tests cover those
+components separately. The updated probe passes strict Rust 1.95 Clippy.
+
+
+### 2026-10-26: Hosted Linux dependency-download timeout
+
+Main CI job `121771335555` (run `40377435087`, source `89453f8`) was cancelled
+at its one-hour limit during `apt-get install`, before Rust or package compilation.
+The log shows slow Azure Ubuntu mirror transfers, including over eleven minutes
+for the recommended 27.4 MB `pocketsphinx-en-us` speech model. This is not evidence
+of a compiler, runtime or cache failure.
+
+The dependency step now uses `--no-install-recommends`, explicit network
+timeouts/retries, and its own 15-minute limit. An Ubuntu 24.04 container simulation
+resolves the explicit dependency set without the speech-model package. Workflow
+lint and all seven publication-policy tests pass. A real hosted install/build
+rerun is still required; dependency resolution alone does not qualify runtime
+behaviour. The completed job log is `/tmp/owc-linux-package-121771335555.log`.
+
+
+### 2026-10-26: OBS-connected browser rerun
+
+The latest combined run passed native capture/export, delayed complete/partial
+recovery, closed-history recovery, marker alignment and native reconnect. Browser
+validation exposed two fixture races: pointer geometry was sampled before the
+ResizeObserver restored the visible pane width, and live OBS snapshots replaced
+a deliberately synthetic pending-player state.
+
+The test now waits for the visible width before the same real pointer drag, and
+temporarily holds live state events only during synthetic rendering assertions.
+It restores live updates before backend configuration, marker, export and shutdown
+checks. Assertions were retained. A targeted OBS-connected browser rerun passes
+in `/tmp/owc-browser-44jlxza3` (private OBS `/tmp/owc-obs-5a98nbmc`).
+`OWC_BROWSER_SETUP_ONLY=1` runs this setup/UI check without repeating the unrelated
+capture suite. The earlier standalone browser suite also passed in
+`/tmp/owc-browser-c3fr76cu`. Probe formatting and strict Rust 1.95 Clippy pass.
+
+Hosted package reruns remain blocked on committing/pushing: the configured SSH
+signing agent alternates between refusing connections and having no identities.
+Signing has not been disabled or bypassed. No release is published.

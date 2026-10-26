@@ -311,7 +311,10 @@ pub async fn serve(
     let token = Uuid::new_v4().to_string();
     let (tx, rx) = mpsc::channel(32);
     let (status_tx, status) = watch::channel(json!({"message":"Starting"}));
-    let engine = Engine::new(root.clone(), tx.clone(), status_tx)?;
+    let engine = Engine::new(root.clone(), tx.clone(), status_tx.clone())?;
+    // The desktop can request state before OBS reconnect finishes. Publish the
+    // full schema before exposing the server, rather than a partial placeholder.
+    status_tx.send_replace(engine.snapshot()?);
     tokio::spawn(engine.run(rx));
     let (shutdown, mut shutdown_rx) = watch::channel(false);
     let shutdown_signal = shutdown.clone();
