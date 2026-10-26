@@ -24,7 +24,7 @@ base64 = "0.22"
 sha2 = "0.10"
 futures-util = "0.3"
 tokio-tungstenite = "0.28"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 axum = "0.8"
 wry = "0.53"
 tao = "0.34"
