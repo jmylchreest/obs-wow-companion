@@ -682,3 +682,19 @@ Windows workspace tests and the native credential-store test passed in run
 40374920263, although that run failed its later documentation check. Credential
 storage is therefore verified independently; full Windows CI/package validation
 still requires the UTF-8 fix's rerun.
+
+
+### 2026-10-26: Portable process-crash qualification
+
+The crash-recovery smoke now compiles a dependency-free Rust worker instead of
+executing a Unix-only Python shebang. Windows uses an executable helper and
+process-tree cleanup; Linux retains process-group cleanup. Both packaging jobs
+now run the same interrupted-export/restart check.
+
+The assertion waits for the old orphan's FFmpeg process to finish before checking
+that it cannot change the published clip. Previously a fixed 500 ms sleep could
+miss a late write on a slow runner. The portable helper passed locally with
+preserved sources, distinct retry staging paths, one published clip and complete
+FFmpeg decode (`/tmp/owc-recovery-d8w_6v2q`). Workflow lint and seven release-policy
+tests pass. Native Windows execution remains pending; enabling a job is not
+runtime evidence.

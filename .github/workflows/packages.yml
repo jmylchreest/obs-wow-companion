@@ -49,8 +49,7 @@ jobs:
         if: runner.os == 'Linux'
         run: dbus-run-session -- python3 scripts/browser-smoke.py
       - name: Process crash recovery
-        if: runner.os == 'Linux'
-        run: python3 scripts/recovery-smoke.py
+        run: python scripts/recovery-smoke.py
       - name: Collect probe evidence
         if: always()
         run: python scripts/ci-tools.py evidence

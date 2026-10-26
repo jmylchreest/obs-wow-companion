@@ -11,7 +11,7 @@ import time
 import uuid
 
 root = Path(tempfile.mkdtemp(prefix="owc-recovery-"))
-binary = str(Path(os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion")).resolve())
+binary = str(Path(os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion.exe" if os.name == "nt" else "target/debug/obs-wow-companion")).resolve())
 processes = []
 logs = []
 
@@ -19,7 +19,7 @@ def launch():
     log = (root / f"app-{len(processes)}.log").open("w")
     logs.append(log)
     app = subprocess.Popen([binary, "--no-open", "--data-dir", str(root)],
-                           stdout=log, stderr=log, start_new_session=True)
+                           stdout=log, stderr=log, start_new_session=os.name != "nt")
     processes.append(app)
     return app
 
@@ -41,16 +41,8 @@ try:
     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i",
                     "testsrc2=size=320x180:rate=30", "-f", "lavfi", "-i",
                     "sine=sample_rate=48000", "-t", "3", "-c:v", "libx264", "-c:a", "aac", str(source)], check=True)
-    wrapper = root / "media-worker.py"
-    wrapper.write_text("#!/usr/bin/env python3\n" +
-        "import os, pathlib, sys, time\n" +
-        f"root=pathlib.Path({str(root)!r})\n" +
-        "part=next((arg for arg in sys.argv[1:] if arg.endswith('part-0000.mkv')),None)\n" +
-        "if part:\n with (root/'worker-paths').open('a') as log: log.write(part+'\\n')\n" +
-        "held=False\nif part:\n try:\n  (root/'hold-once').unlink()\n  held=True\n except FileNotFoundError:\n  pass\n" +
-        "if held:\n (root/'worker-started').write_text(str(os.getpid()))\n while not (root/'release-worker').exists(): time.sleep(0.05)\n" +
-        "os.execvp('ffmpeg',['ffmpeg',*sys.argv[1:]])\n", encoding="utf-8")
-    wrapper.chmod(0o700)
+    wrapper = root / ("media-worker.exe" if os.name == "nt" else "media-worker")
+    subprocess.run(["rustc", "--edition=2024", "scripts/recovery-worker.rs", "-o", str(wrapper)], check=True)
     (root / "hold-once").touch()
     identity = str(uuid.uuid4())
     now = int(time.time() * 1000)
@@ -87,7 +79,7 @@ try:
     destination = root / "videos" / f"{identity}.mkv"
     before = destination.read_bytes()
     (root/'release-worker').touch()
-    time.sleep(0.5)
+    wait_for(lambda: (root/"orphan-finished").exists())
     assert destination.read_bytes() == before, "orphan worker changed published output"
     assert source.exists()
     assert len(list((root/'videos').glob('*.mkv'))) == 1
@@ -95,11 +87,21 @@ try:
                     "-f", "null", "-"], check=True)
     print(f"Process crash, orphan worker isolation and single-output recovery passed: {root}")
 finally:
+    if os.name == "nt" and (root/'worker-started').exists() and not (root/'orphan-finished').exists():
+        # Terminate the held orphan's tree even when an earlier assertion failed.
+        worker_pid = int((root/'worker-started').read_text(encoding="utf-8"))
+        subprocess.run(["taskkill", "/PID", str(worker_pid), "/T", "/F"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     for process in reversed(processes):
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        if os.name == "nt":
+            if process.poll() is None:
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
         if process.poll() is None:
             process.wait(timeout=5)
     for log in logs:

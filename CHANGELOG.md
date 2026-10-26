@@ -32,6 +32,8 @@
 
 ### Added
 
+- Run interrupted-export recovery checks on Windows as well as Linux, waiting for orphan workers to finish before validating the recovered clip.
+
 - Exact-version CI caches for Cargo validation and packaging tools, separated by OS, architecture and Rust compiler.
 
 - Native OBS validation of delayed encounters with missing leading footage, including truncated metadata and a playable partial clip.
