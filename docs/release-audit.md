@@ -35,6 +35,11 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 ## Current verification
 
+- Current committed Linux package (`b247956`) passes extracted service/media,
+  native window-close, WebKit playback/UI and process-crash recovery checks. See
+  [artifact evidence](evidence/package-linux-2026-10-26.json). Clean-machine and
+  native Windows package validation remain open.
+
 - `cargo-nextest nextest run --workspace`: 90 passed, 7 opt-in tests skipped
   (credential store, native OBS reconnect, throughput and four ENOSPC checks). Local sockets were
   enabled for mock servers. The restricted run failed only at socket creation.

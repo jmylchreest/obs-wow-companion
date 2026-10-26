@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-26",
+  "commit": "b247956",
+  "target": "x86_64-unknown-linux-gnu",
+  "version": "0.1.0-dev.1",
+  "archive": "owc-app-x86_64-unknown-linux-gnu.tar.xz",
+  "bytes": 4950460,
+  "sha256": "99b084b5fa238682d29b12b23168045f999e5f23be5be879685bde54b4d65efc",
+  "checks": {
+    "archive_checksum_required_files_version": "passed",
+    "service_authentication_two_track_media_shutdown": "/tmp/owc-service-yk6_0mo4",
+    "native_window_close": "/tmp/owc-desktop-lojsysdk",
+    "process_crash_orphan_isolation": "/tmp/owc-recovery-wgvyaaax",
+    "webkit_playback_and_ui": "/tmp/owc-browser-hk7eknk2"
+  },
+  "scope": "Local Linux host with installed GTK/WebKit/FFmpeg; not a clean-machine or Windows qualification"
+}

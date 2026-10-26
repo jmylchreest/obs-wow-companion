@@ -562,3 +562,17 @@ a gapped/unavailable clip. The corrected fixture separates sessions by 35 second
 to isolate missing leading footage. Gap rejection was not relaxed. The final run
 also passes complete-history recovery, automatic stopping, scene restoration and
 owned shutdown. Rust 1.95 strict Clippy passes. Windows qualification remains open.
+
+
+### 2026-10-26: Current committed Linux package
+
+Built `b247956` with cargo-dist's local Linux target. The 4,950,460-byte archive
+passes checksum, required-content and executable-version verification. It includes
+the player website assets alongside the README, guides and native OBS templates.
+The extracted executable passes authenticated service/two-track media/shutdown,
+native desktop window-close, WebKit original playback and UI, and process-kill
+recovery with orphan-encoder isolation.
+
+[Archive checksum and evidence paths](evidence/package-linux-2026-10-26.json)
+identify this exact artifact. This is local-host evidence with installed system
+dependencies; clean Linux and native Windows package jobs remain release gates.
