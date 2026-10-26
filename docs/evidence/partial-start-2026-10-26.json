@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-26",
+  "platform": "Linux X11, private Xvfb, OBS 32.2.2",
+  "scenario": "Late encounter start before current recording, with prior session outside requested interval",
+  "coverage": "truncated",
+  "missing_start_ms": 25939,
+  "duration_ms": 7200,
+  "audio_tracks": 2,
+  "warnings": [
+    "Requested history is unavailable; this clip contains only retained footage."
+  ],
+  "export": {
+    "encoder": "copy",
+    "fallback": null
+  },
+  "evidence_directory": "/tmp/owc-obs-ei_zpu03",
+  "scope": "Synthetic log and test pattern; native Windows remains unverified"
+}

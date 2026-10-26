@@ -25,6 +25,8 @@
 
 ### Added
 
+- Native OBS validation of delayed encounters with missing leading footage, including truncated metadata and a playable partial clip.
+
 - Native combat-log file notifications with bounded wakeups and periodic reconciliation when notifications are missed or unavailable.
 
 - Native OBS regression for a 30-second delayed encounter start, retained pre-roll and automatic recording completion.

@@ -546,3 +546,19 @@ the retained-footage warning to metadata. No existing capture, invalid timelines
 pause and stopping guards remain in force; old events cannot start new OBS output.
 Capture lifecycle tests pass. Native partial-coverage playback remains part of
 final platform qualification; the complete-coverage native case is recorded above.
+
+
+### 2026-10-26: Native partial-history export
+
+The expanded isolated OBS probe passes complete and truncated delayed encounters
+with native filesystem notifications enabled (`/tmp/owc-obs-ei_zpu03`). The partial
+case requests an interval beginning before capture, requires `truncated` coverage,
+a source origin after the requested start, a 5–15 second playable output and the
+retained-footage warning. Both audio tracks are retained. See
+[measured partial-history evidence](evidence/partial-start-2026-10-26.json).
+
+An initial fixture overlapped two separate capture sessions and correctly yielded
+a gapped/unavailable clip. The corrected fixture separates sessions by 35 seconds
+to isolate missing leading footage. Gap rejection was not relaxed. The final run
+also passes complete-history recovery, automatic stopping, scene restoration and
+owned shutdown. Rust 1.95 strict Clippy passes. Windows qualification remains open.

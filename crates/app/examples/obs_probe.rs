@@ -519,7 +519,24 @@ async fn verify_delayed_capture(
     logs: &std::path::Path,
     root: &std::path::Path,
 ) -> Result<()> {
+    for truncated in [false, true] {
+        verify_delayed_case(status, logs, root, truncated).await?;
+    }
+    Ok(())
+}
+
+async fn verify_delayed_case(
+    status: &tokio::sync::watch::Receiver<serde_json::Value>,
+    logs: &std::path::Path,
+    root: &std::path::Path,
+    truncated: bool,
+) -> Result<()> {
     use std::time::Duration;
+    if truncated {
+        // Keep the requested interval after the previous session, so this tests
+        // missing leading footage rather than a real gap between two recordings.
+        tokio::time::sleep(Duration::from_secs(35)).await;
+    }
     append_event(logs, "ENCOUNTER_START,1005,Earlier boss,16,20")?;
     for _ in 0..40 {
         if status.borrow()["armed"] == true {
@@ -532,11 +549,16 @@ async fn verify_delayed_capture(
         "earlier encounter did not start capture"
     );
     tokio::time::sleep(Duration::from_secs(4)).await;
-    let start = chrono::Local::now();
-    tokio::time::sleep(Duration::from_secs(30)).await;
-    append_event_at(logs, "ENCOUNTER_START,1004,Delayed boss,16,20", start)?;
+    let name = if truncated {
+        "Partial boss"
+    } else {
+        "Delayed boss"
+    };
+    let start = chrono::Local::now() - chrono::Duration::seconds(if truncated { 30 } else { 0 });
+    tokio::time::sleep(Duration::from_secs(if truncated { 1 } else { 30 })).await;
+    append_event_at(logs, &format!("ENCOUNTER_START,1004,{name},16,20"), start)?;
     tokio::time::sleep(Duration::from_secs(1)).await;
-    append_event(logs, "ENCOUNTER_END,1004,Delayed boss,16,20,1")?;
+    append_event(logs, &format!("ENCOUNTER_END,1004,{name},16,20,1"))?;
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     for _ in 0..160 {
@@ -544,31 +566,25 @@ async fn verify_delayed_capture(
         if let Some(activity) = state["activities"].as_array().and_then(|items| {
             items
                 .iter()
-                .find(|a| a["name"] == "Delayed boss" && a["status"] == "ready")
+                .find(|a| a["name"] == name && a["status"] == "ready")
         }) {
             let path =
                 std::path::PathBuf::from(activity["path"].as_str().context("delayed clip path")?);
             let sidecar: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(path.with_extension("json"))?)?;
-            let plan: owc_domain::ClipPlan = serde_json::from_value(sidecar["plan"].clone())?;
-            anyhow::ensure!(
-                plan.actual_start_ms
-                    .is_some_and(|at| at <= start.timestamp_millis() - 1000),
-                "delayed clip lost retained pre-roll: {plan:?}"
-            );
-            anyhow::ensure!(
-                plan.sources
-                    .iter()
-                    .map(|range| range.duration_ms)
-                    .sum::<i64>()
-                    >= 31_000,
-                "delayed clip lost footage: {plan:?}"
-            );
+            verify_delayed_coverage(&sidecar, start.timestamp_millis(), truncated)?;
             std::fs::write(
-                root.join("delayed-start.json"),
+                root.join(if truncated {
+                    "partial-start.json"
+                } else {
+                    "delayed-start.json"
+                }),
                 serde_json::to_vec_pretty(&sidecar)?,
             )?;
-            tracing::info!("30-second delayed encounter recovered with retained pre-roll");
+            tracing::info!(
+                truncated,
+                "Delayed encounter recovered with expected footage coverage"
+            );
             return Ok(());
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -577,4 +593,54 @@ async fn verify_delayed_capture(
         "delayed encounter did not produce playable footage: {}",
         *status.borrow()
     )
+}
+
+fn verify_delayed_coverage(
+    sidecar: &serde_json::Value,
+    start_ms: i64,
+    truncated: bool,
+) -> Result<()> {
+    let plan: owc_domain::ClipPlan = serde_json::from_value(sidecar["plan"].clone())?;
+    if truncated {
+        anyhow::ensure!(
+            plan.coverage == owc_domain::Coverage::Truncated,
+            "partial coverage: {plan:?}"
+        );
+        anyhow::ensure!(
+            plan.actual_start_ms.is_some_and(|at| at > start_ms),
+            "invented missing history"
+        );
+        anyhow::ensure!(
+            sidecar["activity"]["warnings"]
+                .as_array()
+                .is_some_and(|warnings| warnings.iter().any(|warning| warning
+                    .as_str()
+                    .is_some_and(|text| text.contains("only retained footage")))),
+            "missing truncation warning"
+        );
+        anyhow::ensure!(
+            sidecar["media"]["duration_ms"]
+                .as_i64()
+                .is_some_and(|ms| (5_000..15_000).contains(&ms)),
+            "partial clip duration: {sidecar}"
+        );
+    } else {
+        anyhow::ensure!(
+            plan.coverage == owc_domain::Coverage::Complete,
+            "incomplete retained history: {plan:?}"
+        );
+        anyhow::ensure!(
+            plan.actual_start_ms.is_some_and(|at| at <= start_ms - 1000),
+            "delayed clip lost retained pre-roll: {plan:?}"
+        );
+        anyhow::ensure!(
+            plan.sources
+                .iter()
+                .map(|range| range.duration_ms)
+                .sum::<i64>()
+                >= 31_000,
+            "delayed clip lost footage: {plan:?}"
+        );
+    }
+    Ok(())
 }
