@@ -38,6 +38,26 @@ impl Default for Media {
         }
     }
 }
+fn audio_title(stream: &Value) -> String {
+    let tags = stream["tags"].as_object();
+    let tag = |name: &str| {
+        tags.and_then(|tags| tags.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
+            .and_then(|(_, value)| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    };
+    tag("title")
+        .or_else(|| {
+            tag("handler_name").filter(|name| {
+                !["SoundHandler", "AudioHandler", "OBS Audio Handler"]
+                    .iter()
+                    .any(|generic| name.eq_ignore_ascii_case(generic))
+            })
+        })
+        .unwrap_or_default()
+        .to_owned()
+}
+
 fn default_vaapi_device() -> PathBuf {
     "/dev/dri/renderD128".into()
 }
@@ -358,18 +378,7 @@ impl Media {
             audio_titles: streams
                 .iter()
                 .filter(|s| s["codec_type"] == "audio")
-                .map(|s| {
-                    s["tags"]["title"]
-                        .as_str()
-                        .filter(|title| !title.is_empty())
-                        .or_else(|| {
-                            s["tags"]["handler_name"]
-                                .as_str()
-                                .filter(|title| *title != "SoundHandler")
-                        })
-                        .unwrap_or_default()
-                        .to_owned()
-                })
+                .map(audio_title)
                 .collect(),
             width: video["width"].as_u64().unwrap_or(0),
             height: video["height"].as_u64().unwrap_or(0),
@@ -1046,6 +1055,94 @@ mod tests {
         inputs[1].stream_layout[0]["width"] = serde_json::json!(999);
         assert!(direct_copy_compatible(&plan, &inputs).is_err());
     }
+    #[test]
+    fn audio_titles_ignore_container_handlers_and_preserve_real_names() {
+        for handler in ["SoundHandler", "AudioHandler", "OBS Audio Handler"] {
+            assert_eq!(
+                audio_title(&serde_json::json!({"tags":{"HANDLER_NAME":handler}})),
+                ""
+            );
+        }
+        assert_eq!(
+            audio_title(
+                &serde_json::json!({"tags":{"TITLE":" Game ","handler_name":"OBS Audio Handler"}})
+            ),
+            "Game"
+        );
+        assert_eq!(
+            audio_title(&serde_json::json!({"tags":{"handler_name":"Microphone"}})),
+            "Microphone"
+        );
+        assert_eq!(
+            audio_title(&serde_json::json!({"tags":{"title":" ","HANDLER_NAME":"Chat"}})),
+            "Chat"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_encoder_exports_or_reports_cpu_fallback() {
+        let dir = tempfile::tempdir().expect("temp");
+        let src = dir.path().join("source.mkv");
+        let fixture = Media::default().test_fixture(&src).await.expect("fixture");
+        let mut activity = Activity::new(Kind::Manual, "encoder matrix".into(), 0, "manual");
+        activity.finish(3000, Outcome::Unknown);
+        let segments: Vec<_> = (0..2)
+            .map(|n| Segment {
+                id: uuid::Uuid::new_v4(),
+                session: activity.id,
+                path: src.clone(),
+                start_ms: n * fixture.duration_ms,
+                end_ms: (n + 1) * fixture.duration_ms,
+                closed: true,
+                managed: true,
+            })
+            .collect();
+        let plan = plan_clip(&activity, &segments, 0, 0);
+        for encoder in [
+            Encoder::Cpu,
+            Encoder::Nvidia,
+            Encoder::Intel,
+            Encoder::Amd,
+            Encoder::Vaapi,
+        ] {
+            let media = Media {
+                encoder,
+                ..Media::default()
+            };
+            for (name, mode) in [("precise", CutMode::Precise), ("copy", CutMode::Fast)] {
+                let output = media
+                    .export(
+                        &plan,
+                        &dir.path().join(format!("{}-{name}.mkv", encoder.name())),
+                        mode,
+                    )
+                    .await
+                    .expect("usable export");
+                assert_eq!(output.audio_tracks, 2);
+                assert!(
+                    (output.duration_ms - 3000).abs() < 150,
+                    "{} {name}: {}",
+                    encoder.name(),
+                    output.duration_ms
+                );
+                let actual = output.export.expect("actual encoder metadata");
+                if let Some(reason) = actual.fallback {
+                    assert_eq!(actual.encoder, "libx264");
+                    assert!(!reason.is_empty());
+                } else {
+                    assert_eq!(
+                        actual.encoder,
+                        if matches!(mode, CutMode::Fast) {
+                            "copy"
+                        } else {
+                            encoder.name()
+                        }
+                    );
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     async fn unavailable_gpu_retries_cpu_and_reports_actual_encoder() {
         let dir = tempfile::tempdir().expect("temp");
@@ -1133,7 +1230,14 @@ mod tests {
     #[tokio::test]
     async fn precise_many_segments_do_not_accumulate_encoder_delay() {
         let dir = tempfile::tempdir().expect("temp");
-        let media = Media::default();
+        let encoder = std::env::var("OWC_TEST_ENCODER")
+            .ok()
+            .map(|value| serde_json::from_value(Value::String(value)).expect("encoder name"))
+            .unwrap_or_default();
+        let media = Media {
+            encoder,
+            ..Media::default()
+        };
         let src = dir.path().join("source.mkv");
         continuity_fixture(&media, &src).await;
         let mut activity = Activity::new(Kind::Manual, "many splits".into(), 0, "manual");
@@ -1154,6 +1258,11 @@ mod tests {
             .export(&plan, &dir.path().join("many.mkv"), CutMode::Precise)
             .await
             .expect("many segment export");
+        assert_eq!(
+            probe.export.as_ref().expect("encoder").encoder,
+            encoder.name()
+        );
+        assert!(probe.export.as_ref().expect("encoder").fallback.is_none());
         assert!(
             (probe.duration_ms - 20_000).abs() < 100,
             "duration {}",

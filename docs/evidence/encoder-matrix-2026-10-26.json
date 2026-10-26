@@ -1,0 +1,93 @@
+{
+  "scope": "Linux host, FFmpeg 9.0.2, AMD GPUs. NVIDIA/Intel/AMF hardware execution is not qualified by successful CPU fallback.",
+  "fixture": "Three 3-second 640x360 30fps source segments, two audio tracks, non-keyframe cut",
+  "results": [
+    {
+      "requested": "cpu",
+      "mode": "precise",
+      "actual": "libx264",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8021
+    },
+    {
+      "requested": "cpu",
+      "mode": "copy",
+      "actual": "copy",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8667
+    },
+    {
+      "requested": "nvidia",
+      "mode": "precise",
+      "actual": "libx264",
+      "fallback_reason": "Preferred export failed; used CPU: media process failed: [h264_nvenc @ 0x5626c991ea80] Cannot load libnvidia-encode.so.1",
+      "audio_tracks": 2,
+      "duration_ms": 8021
+    },
+    {
+      "requested": "nvidia",
+      "mode": "copy",
+      "actual": "copy",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8667
+    },
+    {
+      "requested": "intel",
+      "mode": "precise",
+      "actual": "libx264",
+      "fallback_reason": "Preferred export failed; used CPU: media process failed: [h264_qsv @ 0x5643fb39f9c0] Error creating a MFX session: -9.",
+      "audio_tracks": 2,
+      "duration_ms": 8021
+    },
+    {
+      "requested": "intel",
+      "mode": "copy",
+      "actual": "copy",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8667
+    },
+    {
+      "requested": "amd",
+      "mode": "precise",
+      "actual": "libx264",
+      "fallback_reason": "Preferred export failed; used CPU: media process failed: [AMF @ 0x7fb014013600] DLL libamfrt64.so.1 failed to open",
+      "audio_tracks": 2,
+      "duration_ms": 8021
+    },
+    {
+      "requested": "amd",
+      "mode": "copy",
+      "actual": "copy",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8667
+    },
+    {
+      "requested": "vaapi",
+      "mode": "precise",
+      "actual": "h264_vaapi",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8021
+    },
+    {
+      "requested": "vaapi",
+      "mode": "copy",
+      "actual": "copy",
+      "fallback_reason": null,
+      "audio_tracks": 2,
+      "duration_ms": 8667
+    }
+  ],
+  "continuity_check": {
+    "encoder": "h264_vaapi",
+    "segments": 20,
+    "frames": 600,
+    "audio_tracks": 2,
+    "result": "Passed strict duration, frame cadence and audio continuity assertions without CPU fallback"
+  }
+}

@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Fixed
+- Replace the native audio-track dropdown with a compact player button and radio menu matching the marker filter.
+- Add familiar player keyboard shortcuts for playback, seeking, mute, volume, speed and fullscreen; reserve M for mute instead of recording.
+
+- Ignore generic OBS audio-handler metadata in track names, preserve case-insensitive track titles, and clarify the wait for OBS to finish saving footage.
+
+- Replace fragment-based Live review with Stop recording for automatic encounters, retaining captured footage and allowing later encounters to record.
+
+- Show a red D for failed or abandoned Mythic+ recordings even when upgrade timing was not recorded.
 
 - Give native test sessions private runtime/config directories so D-Bus-activated services cannot replace desktop credential-agent sockets.
 

@@ -100,9 +100,9 @@ body{padding-bottom:var(--events-space,34px)}
 #recording-workspace.library-collapsed #capture-actions{display:none}
 .settings-workspace{height:calc(100dvh - 100px - var(--events-space,34px))}
 
-#marker-menu{position:absolute;right:12px;bottom:64px;z-index:250;background:#15212bf5;border:1px solid var(--border);border-radius:6px;padding:6px;min-width:170px;max-height:calc(100% - 80px);overflow:auto;box-shadow:0 4px 16px #0008;font:12px/1.4 system-ui}
-#marker-menu label{display:flex;align-items:center;gap:9px;margin:0;padding:7px 10px;color:var(--text);cursor:pointer}#marker-menu label:hover{background:#233d3c}#marker-menu label:first-child{border-bottom:1px solid var(--border);font-weight:600}#marker-menu input{width:auto;margin:0;accent-color:var(--accent)}
-.video-shell .marker-menu-open .vjs-control-bar{opacity:1!important;visibility:visible!important}
+:is(#marker-menu,#audio-menu){position:absolute;right:12px;bottom:64px;z-index:250;background:#15212bf5;border:1px solid var(--border);border-radius:6px;padding:6px;min-width:170px;max-height:calc(100% - 80px);overflow:auto;box-shadow:0 4px 16px #0008;font:12px/1.4 system-ui}
+:is(#marker-menu,#audio-menu) label{display:flex;align-items:center;gap:9px;margin:0;padding:7px 10px;color:var(--text);cursor:pointer}:is(#marker-menu,#audio-menu) label:hover{background:#233d3c}#marker-menu label:first-child{border-bottom:1px solid var(--border);font-weight:600}:is(#marker-menu,#audio-menu) input{width:auto;margin:0;accent-color:var(--accent)}
+.video-shell :is(.marker-menu-open,.audio-menu-open) .vjs-control-bar{opacity:1!important;visibility:visible!important}
 
 html,body{height:100%;overflow:hidden}body{height:100dvh;display:flex;flex-direction:column;padding-bottom:var(--events-space,34px)}.app-header{flex-shrink:0}
 main{width:100%;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:10px}#error{flex-shrink:0;max-height:100px;overflow:auto;margin-bottom:8px}
@@ -169,3 +169,6 @@ main{width:100%;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:
 .date-range-actions{display:flex;gap:6px;border-top:1px solid var(--border);padding-top:12px}
 .date-range-actions button{font-size:12px;padding:6px 10px}
 #date-range-all{margin-right:auto}
+
+.video-shell .vjs-audio-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;vertical-align:middle}
+#audio-menu{max-width:min(320px,calc(100% - 24px))}#audio-menu label{overflow-wrap:anywhere}#audio-menu input{flex-shrink:0}

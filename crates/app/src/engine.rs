@@ -363,7 +363,7 @@ impl Engine {
             if recording.invalid {
                 return json!({"stage":"uncertain_source", "title":"Check OBS recording", "detail":"Recording timing was interrupted. Stop recording in OBS so the remaining footage can be checked."});
             }
-            return json!({"stage":"source_open", "title":"Closing footage", "detail":"Waiting for OBS to close the final recording fragment."});
+            return json!({"stage":"source_open", "title":"Waiting for OBS to finish saving", "detail":"OBS is still writing the last part of this recording. Clip preparation starts when that file is finished."});
         }
         if self.export_running {
             json!({"stage":"queued", "title":"Queued", "detail":"Waiting for the current clip to finish saving."})
@@ -806,7 +806,7 @@ impl Engine {
         Ok(())
     }
 
-    fn abandon_key(&mut self, id: Uuid) -> Result<()> {
+    fn stop_activity(&mut self, id: Uuid) -> Result<()> {
         let (key, state) = self
             .logs
             .iter()
@@ -815,9 +815,9 @@ impl Engine {
                     .detector
                     .active
                     .as_ref()
-                    .is_some_and(|a| a.id == id && a.kind == Kind::MythicPlus)
+                    .is_some_and(|a| a.id == id && a.kind != Kind::Manual)
             })
-            .context("This key is no longer in progress")?;
+            .context("This encounter is no longer in progress")?;
         let key = key.clone();
         let installation = self
             .config
@@ -827,9 +827,11 @@ impl Engine {
             .context("Installation no longer configured")?
             .clone();
         let mut next = state.clone();
-        let mut activity = next.detector.active.take().context("No active key")?;
+        let mut activity = next.detector.active.take().context("No active encounter")?;
         activity.finish(Self::now(), Outcome::Abandoned);
-        activity.warnings.push("Marked abandoned by you.".into());
+        activity
+            .warnings
+            .push("Recording ended early by you.".into());
         let mut logs = self.logs.clone();
         logs.insert(key, next);
         self.commit_logs(
@@ -856,7 +858,7 @@ impl Engine {
         });
         // Invalidate queued worker snapshots so they cannot resurrect the abandoned run.
         self.restart_log_watchers(false);
-        self.message = "Key marked abandoned.".into();
+        self.message = "Recording ended early. Waiting for your next encounter.".into();
         Ok(())
     }
 
@@ -1507,9 +1509,12 @@ impl Engine {
                 self.message = "Waiting for your next encounter.".into();
             }
             "add_marker" => self.add_marker(&v).await?,
-            "abandon_key" => {
-                let id: Uuid = v["id"].as_str().context("Select an active key")?.parse()?;
-                self.abandon_key(id)?;
+            "abandon_key" | "stop_activity" => {
+                let id: Uuid = v["id"]
+                    .as_str()
+                    .context("Select an active encounter")?
+                    .parse()?;
+                self.stop_activity(id)?;
             }
             "manual_start" => {
                 let installation = if let Some(id) = v["installation_id"].as_str() {
@@ -1609,7 +1614,7 @@ impl Engine {
                 }
                 self.db.delete(id)?;
             }
-            "preview" | "live_preview" => {
+            "preview" => {
                 if self.preview_running {
                     return Ok(json!({"busy":true}));
                 }
@@ -1652,29 +1657,17 @@ impl Engine {
                         return Ok(json!({}));
                     }
                 }
-                let (source, key, origin) = if action == "preview" {
-                    let id = v["id"].as_str().context("missing id")?;
-                    Uuid::parse_str(id)?;
-                    (
-                        self.db.media_path(id)?,
-                        id.to_owned(),
-                        self.db
-                            .list()?
-                            .into_iter()
-                            .find(|a| a["id"] == id)
-                            .and_then(|a| a["origin_ms"].as_i64())
-                            .unwrap_or(0),
-                    )
-                } else {
-                    let s = self
-                        .db
-                        .segments()?
-                        .into_iter()
-                        .filter(|s| s.closed && s.path.exists())
-                        .max_by_key(|s| s.end_ms)
-                        .context("no closed segment available yet")?;
-                    (s.path, s.id.to_string(), s.start_ms)
-                };
+                let id = v["id"].as_str().context("missing id")?;
+                Uuid::parse_str(id)?;
+                let source = self.db.media_path(id)?;
+                let key = id.to_owned();
+                let origin = self
+                    .db
+                    .list()?
+                    .into_iter()
+                    .find(|a| a["id"] == id)
+                    .and_then(|a| a["origin_ms"].as_i64())
+                    .unwrap_or(0);
                 let mut source_info = self.config.media.probe(&source).await?;
                 if let Some(sidecar) = crate::sidecar::load(&source.with_extension("json"))? {
                     source_info.export =
@@ -1693,7 +1686,7 @@ impl Engine {
                     } else {
                         "transcode"
                     };
-                if action == "preview" && v["direct"] == true && track == 0 {
+                if v["direct"] == true && track == 0 {
                     self.preview_status = json!({"status":"ready","url":format!("/media/{key}"),"origin_ms":origin,"key":key,"duration_ms":source_duration_ms,"track":track,"direct":true,"source":source_info,"mode":"original"});
                     return Ok(json!({}));
                 }
@@ -3134,7 +3127,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn abandon_key_is_durable_and_rejects_stale_worker_snapshots() {
+    async fn stopped_automatic_recordings_are_durable_and_reject_stale_workers() {
+        for kind in [
+            Kind::MythicPlus,
+            Kind::Raid,
+            Kind::Arena,
+            Kind::SoloShuffle,
+            Kind::Battleground,
+        ] {
+            verify_stopped_activity(kind).await;
+        }
+    }
+
+    async fn verify_stopped_activity(kind: Kind) {
         let root = tempfile::tempdir().expect("root");
         let (tx, _) = mpsc::channel(32);
         let (status, _) = watch::channel(Value::Null);
@@ -3144,14 +3149,14 @@ mod tests {
             name: "Retail".into(),
             logs: root.path().into(),
             flavour: owc_wow_log::Flavour::Retail,
-            categories: vec![Kind::MythicPlus],
+            categories: vec![kind],
             difficulties: vec![],
             minimum_key: 0,
         };
         let mut state = LogState::new(&installation);
         let mut activity = Activity::new(
-            Kind::MythicPlus,
-            "Stuck key".into(),
+            kind,
+            "Current encounter".into(),
             Engine::now() - 1000,
             "Retail",
         );
@@ -3164,7 +3169,9 @@ mod tests {
         engine.automatic_session = true;
         engine.automatic_activities.insert(activity.id);
         let other = Uuid::new_v4();
-        engine.automatic_activities.insert(other);
+        if kind != Kind::Raid {
+            engine.automatic_activities.insert(other);
+        }
         engine
             .add_marker(&json!({"id":activity.id,"label":"Review pull"}))
             .await
@@ -3181,12 +3188,16 @@ mod tests {
         );
         let generation = engine.log_generation;
         engine
-            .command(json!({"action":"abandon_key","id":activity.id}))
+            .command(json!({"action":if kind == Kind::MythicPlus {"abandon_key"} else {"stop_activity"},"id":activity.id}))
             .await
             .expect("abandon");
         assert!(!engine.automatic_activities.contains(&activity.id));
-        assert!(engine.automatic_activities.contains(&other));
-        assert!(engine.automatic_stop.is_none());
+        assert_eq!(
+            engine.automatic_activities.contains(&other),
+            kind != Kind::Raid
+        );
+        assert_eq!(engine.automatic_stop.is_some(), kind == Kind::Raid);
+        assert!(!engine.automatic_paused);
         assert!(
             engine.logs[&installation.id.to_string()]
                 .detector
@@ -3195,7 +3206,7 @@ mod tests {
         );
         let saved = engine.db.list().expect("saved");
         assert_eq!(saved[0]["outcome"], "abandoned");
-        assert!(engine.abandon_key(activity.id).is_err());
+        assert!(engine.stop_activity(activity.id).is_err());
         let (committed, _) = oneshot::channel();
         engine
             .log_batch(LogBatch {

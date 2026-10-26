@@ -19,10 +19,37 @@ function syncPlayToggle(){
 reviewPlayer.on(['playerreset','loadstart','loadedmetadata','loadeddata','emptied','play','playing','pause','ended','seeked','error'],syncPlayToggle);
 syncPlayToggle();
 controlBar.fullscreenToggle.el().id='fullscreen';
-const audioControl=document.createElement('label');audioControl.className='vjs-audio-choice';audioControl.title='Audio track';
-const audioSelect=document.createElement('select');audioSelect.id='audio';audioSelect.setAttribute('aria-label','Audio track');audioSelect.add(new Option('Track 1','0'));audioControl.append(audioSelect);
-controlBar.el().insertBefore(audioControl,controlBar.fullscreenToggle.el());
-audioSelect.onchange=()=>switchPlaybackAudio().catch(error);
+// Keep the track model shared with playback/export while presenting a player menu.
+const audioSelect=document.createElement('select');audioSelect.id='audio';audioSelect.hidden=true;audioSelect.add(new Option('Track 1','0'));reviewPlayer.el().append(audioSelect);
+const audioToggle=controlBar.addChild('button',{},controlBar.children().length-1);
+audioToggle.el().id='audio-tracks';audioToggle.el().classList.add('vjs-audio-toggle');audioToggle.controlText('Audio tracks');
+audioToggle.el().querySelector('.vjs-icon-placeholder').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/><circle cx="8" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg>';
+const audioMenu=document.createElement('div');audioMenu.id='audio-menu';audioMenu.hidden=true;audioMenu.setAttribute('role','group');audioMenu.setAttribute('aria-label','Audio tracks');reviewPlayer.el().append(audioMenu);
+audioToggle.el().setAttribute('aria-haspopup','true');audioToggle.el().setAttribute('aria-controls','audio-menu');audioToggle.el().setAttribute('aria-expanded','false');
+function closeAudioMenu(){audioMenuKey='';audioMenu.hidden=true;audioToggle.el().setAttribute('aria-expanded','false');reviewPlayer.el().classList.remove('audio-menu-open');}
+let audioMenuKey='';
+function renderAudioMenu(){
+  audioToggle.el().disabled=audioSelect.disabled||audioSelect.options.length<2;
+  audioToggle.el().title='Audio: '+(audioSelect.selectedOptions[0]?.textContent||'Track 1');
+  if(audioMenu.hidden){audioMenuKey='';return;}
+  const key=JSON.stringify([audioSelect.disabled,audioSelect.value,[...audioSelect.options].map(option=>[option.value,option.textContent])]);
+  if(key===audioMenuKey)return;audioMenuKey=key;
+  audioMenu.replaceChildren();
+  for(const option of audioSelect.options){
+    const row=document.createElement('label'),radio=document.createElement('input');
+    radio.type='radio';radio.name='playback-audio-track';radio.value=option.value;radio.checked=option.selected;radio.disabled=audioSelect.disabled;
+    radio.onchange=()=>{audioSelect.value=radio.value;closeAudioMenu();audioToggle.el().focus();audioSelect.dispatchEvent(new Event('change'));};
+    row.append(radio,document.createTextNode(option.textContent));audioMenu.append(row);
+  }
+}
+audioSelect.onchange=()=>{switchPlaybackAudio().catch(error).finally(renderAudioMenu);renderAudioMenu();};
+new MutationObserver(renderAudioMenu).observe(audioSelect,{childList:true,subtree:true,attributes:true,characterData:true});
+audioToggle.on('click',()=>{if(!audioMenu.hidden){closeAudioMenu();return;}closeMarkerMenu();audioMenu.hidden=false;audioToggle.el().setAttribute('aria-expanded','true');reviewPlayer.el().classList.add('audio-menu-open');renderAudioMenu();reviewPlayer.userActive(true);audioMenu.querySelector('input:checked')?.focus();});
+document.addEventListener('pointerdown',event=>{if(!audioMenu.contains(event.target)&&!audioToggle.el().contains(event.target))closeAudioMenu();});
+audioMenu.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();closeAudioMenu();audioToggle.el().focus();}};
+for(const type of ['pointerdown','click','keydown'])audioMenu.addEventListener(type,event=>event.stopPropagation());
+reviewPlayer.on('playerreset',closeAudioMenu);
+renderAudioMenu();
 const markControl=controlBar.addChild('button',{},controlBar.children().length-1);markControl.controlText('Add marker');markControl.el().id='add-marker';markControl.el().title='Add marker';markControl.el().classList.add('vjs-marker-button');markControl.el().querySelector('.vjs-icon-placeholder').textContent='⚑';
 const markerToggle=controlBar.addChild('button',{},controlBar.children().length-1);
 markerToggle.el().id='toggle-markers';markerToggle.el().classList.add('vjs-marker-toggle');
@@ -64,7 +91,7 @@ async function saveMarkerFilters(visible,hidden){
   finally{markerVisibilitySaving=false;renderMarkerVisibility();renderMarkers(reviewActivity());}
 }
 function closeMarkerMenu(){markerMenu.hidden=true;markerToggle.el().setAttribute('aria-expanded','false');reviewPlayer.el().classList.remove('marker-menu-open');}
-markerToggle.on('click',()=>{if(!markerMenu.hidden){closeMarkerMenu();return;}markerMenu.hidden=false;markerToggle.el().setAttribute('aria-expanded','true');reviewPlayer.el().classList.add('marker-menu-open');renderMarkerMenu();reviewPlayer.userActive(true);});
+markerToggle.on('click',()=>{if(!markerMenu.hidden){closeMarkerMenu();return;}closeAudioMenu();markerMenu.hidden=false;markerToggle.el().setAttribute('aria-expanded','true');reviewPlayer.el().classList.add('marker-menu-open');renderMarkerMenu();reviewPlayer.userActive(true);});
 document.addEventListener('pointerdown',event=>{if(!markerMenu.contains(event.target)&&!markerToggle.el().contains(event.target))closeMarkerMenu();});
 markerMenu.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeMarkerMenu();markerToggle.el().focus();}};
 for(const type of ['pointerdown','click','keydown'])markerMenu.addEventListener(type,event=>event.stopPropagation());

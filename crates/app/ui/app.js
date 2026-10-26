@@ -26,13 +26,19 @@ for(const id of ['library-tab','setup-tab'])$(id).onkeydown=event=>{if(['ArrowLe
 $('arm').onclick=run(()=>action('resume_automatic'));$('disarm').onclick=run(()=>action('pause_automatic'));
 async function startManualClip(){await action('manual_start',{name:'Manual recording',installation_id:$('manual-installation-source').value||undefined});manual=true;}
 $('manual').onclick=run(startManualClip);
-$('manual-end').onclick=run(async()=>{await action('manual_stop');manual=false;});
-$('live').onclick=run(async()=>{selected=null;renderMarkers(null);await action('live_preview',{track:0});show('library');$('review-title').textContent='Live review: last closed segment';});
+function stoppableRecording(){
+  const active=state.active||[];
+  return active.find(a=>a.id===selected)||active.find(a=>a.kind==='manual')||active[0];
+}
+$('manual-end').onclick=run(async()=>{
+  const current=stoppableRecording();if(!current)return;
+  if(current.kind==='manual'){await action('manual_stop');manual=false;}
+  else await action('stop_activity',{id:current.id});
+});
 $('autostart').onchange=run(()=>action('autostart',{enabled:$('autostart').checked}));
 
 $('play').onclick=run(()=>{if(!selected)throw Error('Select a recording first');return requestPlayback(selected,Number($('audio').value),false);});
 
-$('abandon-key').onclick=run(async()=>{if(selected)await action('abandon_key',{id:selected});});
 $('retry').onclick=run(()=>{if(!selected)throw Error('Select a recording first');return action('retry',{id:selected});});
 $('delete').onclick=run(event=>deleteRecording(selected,event.shiftKey));
 $('trim').onsubmit=run(()=>{if(!selected)throw Error('Select a recording first');return action('share_export',{id:selected,path:$('share-path').value,tracks:[...$('share-audio').querySelectorAll('input:checked')].map(input=>Number(input.value)),origin_ms:state.preview?.key===selected?state.preview.origin_ms:undefined,...(rangeEnabled?{start_ms:Math.round(Number($('trim-start').value)*1000),end_ms:Math.round(Number($('trim-end').value)*1000)}:{})});});
@@ -42,14 +48,13 @@ function installation(value={name:'Retail',logs:'',flavour:'retail',categories:k
 $('add-install').onclick=()=>installation();
 function loadConfig(c){setSceneOptions([],c.recording_scene||'');for(const [id,key]of Object.entries(settings))$(id).value=c[key];$('ffmpeg').value=c.media.ffmpeg;$('ffprobe').value=c.media.ffprobe;$('export-mode').value=c.export_mode||'fast';$('export-encoder').value=c.media.encoder||'cpu';$('vaapi-device').value=c.media.vaapi_device||'/dev/dri/renderD128';$('vaapi-device-label').hidden=$('export-encoder').value!=='vaapi';$('installations').replaceChildren();for(const i of c.installations)installation(i);configLoaded=true;}
 $('settings-form').onsubmit=run(async()=>{const c=structuredClone(state.config);for(const [id,key]of Object.entries(settings))c[key]=$(id).type==='number'?Number($(id).value):$(id).value;c.recording_scene=$('recording-scene').value;c.export_mode=$('export-mode').value;c.media={...c.media,ffmpeg:$('ffmpeg').value,ffprobe:$('ffprobe').value,encoder:$('export-encoder').value,vaapi_device:$('vaapi-device').value};c.installations=[...$('installations').children].map(card=>{const get=k=>card.querySelector(`[data-key="${k}"]`).value;return{id:card.dataset.id||undefined,name:get('name'),logs:get('logs'),flavour:get('flavour'),minimum_key:Number(get('minimum_key')),difficulties:get('difficulties').split(',').map(x=>x.trim()).filter(Boolean).map(Number),categories:[...card.querySelectorAll('[data-kind]:checked')].map(i=>i.dataset.kind)};});await action('save_config',{config:c});$('preferences-status').textContent='Preferences saved.';});
-function renderState(next){state=next;if(typeof renderLibraryLayout==='function')renderLibraryLayout();renderMarkerVisibility();$('obs-stats').textContent=state.obs_stats?('OBS: '+Number(state.obs_stats.activeFps||0).toFixed(1)+' FPS · '+(state.obs_stats.renderSkippedFrames||0)+' render frames skipped · '+(state.obs_stats.outputSkippedFrames||0)+' output frames skipped'):'';$('autostart').checked=!!state.autostart;$('message').textContent=state.message||'';$('connection').textContent=state.connected?'OBS connected':'OBS disconnected';$('capture-state').textContent=state.armed?'Recording':state.automatic_paused?'Paused':state.recording_open?'OBS recording (observe only)':state.connected?'Waiting for encounter':'Waiting for OBS';$('active-count').textContent=(state.active||[]).length;$('recording-count').textContent=(state.activities||[]).length;$('export-state').textContent=state.export_running?'Exporting':'Idle';$('arm').disabled=false;$('disarm').disabled=false;manual=(state.active||[]).some(a=>a.kind==='manual');$('manual').disabled=!state.connected||manual;$('manual-end').disabled=!manual;$('log-status').replaceChildren();for(const l of state.log_status||[]){const p=document.createElement('p');p.textContent=`${l.name}: ${l.last_event_ms?new Date(l.last_event_ms).toLocaleString():'waiting for new log events'}`;$('log-status').append(p);}if(state.config&&!configLoaded)loadConfig(state.config);if(state.preview?.status==='ready'&&(!selected||state.preview.key===selected)&&state.preview.url!==lastPreview){lastPreview=state.preview.url;if(pendingAudioSwitch?.id===selected)reviewPlayer.defaultPlaybackRate(pendingAudioSwitch.rate);reviewPlayer.src({src:lastPreview,type:state.preview.direct?'video/x-matroska':'video/mp4'});$('empty-player').hidden=true;const a=(state.activities||[]).find(a=>a.id===selected);if(a)renderMarkers(a);}if(state.preview?.status==='generating'&&(!selected||state.preview.key===selected))$('review-state').textContent='Preparing compatible playback…';if(state.preview?.status==='failed')$('review-state').textContent=state.preview.error;const listData=JSON.stringify([state.activities,state.active,state.armed,state.connected,state.automatic_paused,state.ownership,state.recording_activity_ids]);if(listData!==lastListData){lastListData=listData;renderList();renderMarkers(reviewActivity());}const current=recordingById(selected);if(current?.status==='ready'&&selectedStatus&&selectedStatus!=='ready'){if(state.preview?.key===selected&&['ready','generating'].includes(state.preview.status)){selectedStatus='ready';}else choose(current,true).catch(error);}else if(current?.review_available&&retainedRequest!==selected&&state.preview?.key!==selected){retainedRequest=selected;requestPlayback(selected,0,false).catch(error);}renderContext();if(typeof renderPlaybackDetails==='function')renderPlaybackDetails();if(typeof renderLabels==='function')renderLabels();if(typeof renderSetup==='function')renderSetup();}
+function renderState(next){state=next;if(typeof renderLibraryLayout==='function')renderLibraryLayout();renderMarkerVisibility();$('obs-stats').textContent=state.obs_stats?('OBS: '+Number(state.obs_stats.activeFps||0).toFixed(1)+' FPS · '+(state.obs_stats.renderSkippedFrames||0)+' render frames skipped · '+(state.obs_stats.outputSkippedFrames||0)+' output frames skipped'):'';$('autostart').checked=!!state.autostart;$('message').textContent=state.message||'';$('connection').textContent=state.connected?'OBS connected':'OBS disconnected';$('capture-state').textContent=state.armed?'Recording':state.automatic_paused?'Paused':state.recording_open?'OBS recording (observe only)':state.connected?'Waiting for encounter':'Waiting for OBS';$('active-count').textContent=(state.active||[]).length;$('recording-count').textContent=(state.activities||[]).length;$('export-state').textContent=state.export_running?'Exporting':'Idle';$('arm').disabled=false;$('disarm').disabled=false;manual=(state.active||[]).some(a=>a.kind==='manual');$('manual').disabled=!state.connected||manual;$('manual-end').disabled=!stoppableRecording();$('log-status').replaceChildren();for(const l of state.log_status||[]){const p=document.createElement('p');p.textContent=`${l.name}: ${l.last_event_ms?new Date(l.last_event_ms).toLocaleString():'waiting for new log events'}`;$('log-status').append(p);}if(state.config&&!configLoaded)loadConfig(state.config);if(state.preview?.status==='ready'&&(!selected||state.preview.key===selected)&&state.preview.url!==lastPreview){lastPreview=state.preview.url;if(pendingAudioSwitch?.id===selected)reviewPlayer.defaultPlaybackRate(pendingAudioSwitch.rate);reviewPlayer.src({src:lastPreview,type:state.preview.direct?'video/x-matroska':'video/mp4'});$('empty-player').hidden=true;const a=(state.activities||[]).find(a=>a.id===selected);if(a)renderMarkers(a);}if(state.preview?.status==='generating'&&(!selected||state.preview.key===selected))$('review-state').textContent='Preparing compatible playback…';if(state.preview?.status==='failed')$('review-state').textContent=state.preview.error;const listData=JSON.stringify([state.activities,state.active,state.armed,state.connected,state.automatic_paused,state.ownership,state.recording_activity_ids]);if(listData!==lastListData){lastListData=listData;renderList();renderMarkers(reviewActivity());}const current=recordingById(selected);if(current?.status==='ready'&&selectedStatus&&selectedStatus!=='ready'){if(state.preview?.key===selected&&['ready','generating'].includes(state.preview.status)){selectedStatus='ready';}else choose(current,true).catch(error);}else if(current?.review_available&&retainedRequest!==selected&&state.preview?.key!==selected){retainedRequest=selected;requestPlayback(selected,0,false).catch(error);}renderContext();if(typeof renderPlaybackDetails==='function')renderPlaybackDetails();if(typeof renderLabels==='function')renderLabels();if(typeof renderSetup==='function')renderSetup();}
 const updates=new EventSource('/api/events');
 updates.addEventListener('state',event=>{try{renderState(JSON.parse(event.data));}catch(e){error(e);}});
 updates.onerror=()=>{$('connection').textContent='Reconnecting to companion…';};
 
 
 $('favourites-only').onclick=()=>{const button=$('favourites-only');button.setAttribute('aria-pressed',String(button.getAttribute('aria-pressed')!=='true'));renderList();};
-document.addEventListener('keydown',async e=>{try{if($('setup-wizard').open)return;if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(document.activeElement?.tagName))return;if(e.key.toLowerCase()==='m'&&state.armed){e.preventDefault();if(manual)await action('manual_stop');else await startManualClip();}if(e.key===' '&&$('player').src){e.preventDefault();if($('player').paused)await $('player').play();else $('player').pause();}}catch(e){error(e);}});
 
 let desktopQuitPending=false;
 async function requestDesktopQuit(){
@@ -71,17 +76,16 @@ function renderContext(){
 
   $('arm').hidden=!state.automatic_paused;
   $('disarm').hidden=!!state.automatic_paused;
-  $('manual').hidden=manual;
-  $('manual-end').hidden=!manual;
+  const stopping=stoppableRecording();
+  $('manual').hidden=!!stopping;
+  $('manual-end').hidden=!stopping;
+  $('manual-end').title=stopping?`End ${stopping.name} and keep the captured footage`:'';
   const source=$('manual-installation-source'), installs=state.config?.installations||[];
   const optionsKey=JSON.stringify(installs.map(i=>[i.id,i.name]));
   if(source.dataset.options!==optionsKey){const previous=source.value;source.replaceChildren();for(const i of installs)source.add(new Option(i.name,i.id));if(installs.some(i=>i.id===previous))source.value=previous;source.dataset.options=optionsKey;}
-  source.hidden=installs.length<2||!state.connected||manual;
-  $('live').hidden=!state.armed;
+  source.hidden=installs.length<2||!state.connected||!!stopping;
   const recording=(state.activities||[]).find(a=>a.id===selected);
   $('add-marker').disabled=!((state.active||[]).some(a=>a.id===selected)||recording?.status==='ready');
-  $('abandon-key').hidden=!(state.active||[]).some(a=>a.id===selected&&a.kind==='mythic_plus');
-  $('abandon-key').parentElement.hidden=$('abandon-key').hidden;
   if(recording&&['unavailable','failed'].includes(recording.status))$('review-state').textContent=recording.error||label(recording.status);
   if(recording&&['pending','exporting'].includes(recording.status))$('review-state').textContent=recording.processing?.title||'Preparing clip';
   updatePlaybackAvailability();
@@ -104,7 +108,7 @@ function renderContext(){
   if(recording?.status==='ready')renderShareAudio(recording);
   if(pendingAudioSwitch&&state.preview?.key===selected&&state.preview.status==='failed')cancelAudioSwitch();
   $('audio').disabled=!!pendingAudioSwitch;
-  $('audio').parentElement.hidden=!recording||recording.status!=='ready'||(recording.audio_tracks||0)<2;
+  audioToggle.el().hidden=!recording||recording.status!=='ready'||(recording.audio_tracks||0)<2;
   $('play').hidden=!recording||!(recording.status==='ready'||recording.review_available)||state.preview?.status!=='failed';
 }
 $('settings-form').addEventListener('input',()=>{$('preferences-status').textContent='Unsaved changes';});

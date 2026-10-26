@@ -182,6 +182,7 @@ try:
         click('#wizard-close')
     assert js("return document.getElementById('setup-wizard').open") is False
     click('#library-tab')
+    assert js("const before=structuredClone(state),previous=selected;state.active=[{id:'automatic-fixture',name:'Current boss',kind:'raid',start_ms:Date.now(),markers:[],outcome:'unknown'}];selected='automatic-fixture';renderState(state);const ok=!document.getElementById('live')&&!document.getElementById('manual-end').hidden&&!document.getElementById('manual-end').disabled&&document.getElementById('manual').hidden&&stoppableRecording().id==='automatic-fixture';selected=previous;renderState(before);return ok") is True
     assert js("const w=document.getElementById('recording-workspace'),l=document.getElementById('recordings-pane'),r=w.querySelector('.review');return Math.abs(r.getBoundingClientRect().left-l.getBoundingClientRect().right-1)<1&&getComputedStyle(r).borderLeftWidth==='0px'") is True
     # A previously hidden workspace gets its restored width in ResizeObserver.
     # Measure only after that layout pass, otherwise the pointer can miss the divider.
@@ -405,7 +406,20 @@ try:
     assert abs(js("return reviewPlayer.currentTime()")-paused_time)<0.05
     assert js("return reviewPlayer.paused()&&reviewPlayer.playbackRate()===0.5&&window.viewLoads===0") is True
     js("reviewPlayer.playbackRate(1)")
-    js("reviewPlayer.pause();reviewPlayer.currentTime(.8);reviewPlayer.playbackRate(.5);document.getElementById('audio').value='1';document.getElementById('audio').dispatchEvent(new Event('change'))")
+    click('#audio-tracks')
+    assert js("return !audioMenu.hidden&&audioMenu.querySelectorAll('input[type=radio]').length===2") is True
+    js("window.focusedTrack=audioMenu.querySelector('input:checked');focusedTrack.focus();audioSelect.disabled=false")
+    time.sleep(.1)
+    assert js("return document.activeElement===focusedTrack") is True
+    (root/'audio-tracks.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
+    js("audioMenu.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))")
+    assert js("return audioMenu.hidden&&document.activeElement.id==='audio-tracks'") is True
+    click('#audio-tracks')
+    click('#review-title')
+    assert js("return audioMenu.hidden") is True
+    js("reviewPlayer.pause();reviewPlayer.currentTime(.8);reviewPlayer.playbackRate(.5)")
+    click('#audio-tracks')
+    click('#audio-menu input[value="1"]')
     for _ in range(100):
         time.sleep(.1)
         if js("return !pendingAudioSwitch&&state.preview?.track===1&&reviewPlayer.readyState()>=2"):break
@@ -430,9 +444,34 @@ try:
     assert js("return document.querySelectorAll('#markers .event-tick').length") >= 3
     click('#deaths tr td:first-child')
     assert js("return document.getElementById('player').currentTime") < 0.05
+    js("document.activeElement.blur();window.playerKey=(key,extra={})=>document.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true,...extra}));reviewPlayer.pause()")
+    js("playerKey('k')")
+    time.sleep(.1)
+    assert js("return !reviewPlayer.paused()") is True
+    js("playerKey(' ')")
+    assert js("return reviewPlayer.paused()") is True
+    js("window.beforeMute=reviewPlayer.muted();playerKey('m')")
+    assert js("return reviewPlayer.muted()!==beforeMute") is True
+    js("playerKey('m');reviewPlayer.volume(.5);playerKey('ArrowUp')")
+    assert abs(js("return reviewPlayer.volume()")-.55)<.001
+    js("playerKey('>')")
+    assert js("return reviewPlayer.playbackRate()") == 1.25
+    js("playerKey('<');playerKey('5')")
+    assert abs(js("return reviewPlayer.currentTime()-reviewPlayer.duration()/2"))<.05
+    js("playerKey('ArrowLeft')")
+    assert js("return reviewPlayer.currentTime()") == 0
+    js("playerKey('l')")
+    assert abs(js("return reviewPlayer.currentTime()-reviewPlayer.duration()"))<.05
+    js("playerKey('j')")
+    assert js("return reviewPlayer.currentTime()") == 0
+    js("document.getElementById('tags').focus();window.beforeMute=reviewPlayer.muted();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'m',bubbles:true,cancelable:true}))")
+    assert js("return reviewPlayer.muted()===beforeMute") is True
+    js("document.activeElement.blur();document.getElementById('library-view').hidden=true;playerKey('m')")
+    assert js("return reviewPlayer.muted()===beforeMute") is True
+    js("document.getElementById('library-view').hidden=false")
     js("seekTo(0.5)")
     js("document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'.',bubbles:true}))")
-    assert abs(js("return document.getElementById('player').currentTime") - 0.6) < 0.15
+    assert abs(js("return document.getElementById('player').currentTime") - (0.5+1/30)) < 0.02
     js("const rect=reviewPlayer.el().getBoundingClientRect();document.getElementById('player').dispatchEvent(new WheelEvent('wheel',{deltaY:-100,clientX:rect.left+rect.width*.7,clientY:rect.top+rect.height*.4,bubbles:true,cancelable:true}))")
     assert js("return videoZoom>1&&!document.getElementById('reset-video-zoom').hidden&&videoPanX<0") is True
     assert js("return getComputedStyle(controlBar.el()).transform") == 'none'
