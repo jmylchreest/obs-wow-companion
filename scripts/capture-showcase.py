@@ -113,11 +113,13 @@ try:
     click("#library-tab")
     js("document.querySelector('.review-scroll').scrollTop=0") if js("return !!document.querySelector('.review-scroll')") else None
     js("document.getElementById('clip-options').open=false;document.getElementById('player').scrollIntoView({block:'start'});reviewPlayer.currentTime(5)")
-    capture=launch(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1440x1000",
-        "-framerate","20","-i",":124","-t","10","-vf","scale=1152:-2","-c:v","libx264",
+    capture=launch(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1440x960",
+        "-framerate","20","-i",":124+0,40","-t","10","-vf","scale=1152:-2","-c:v","libx264",
         "-preset","fast","-crf","25","-pix_fmt","yuv420p","-movflags","+faststart",str(assets/"review-demo.mp4")],"capture.log")
-    js("reviewPlayer.play();reviewPlayer.userActive(true)")
+    play = driver(prefix+"/element",{"using":"css selector","value":"#toggle-play"})
+    driver(prefix+"/element/"+next(iter(play.values()))+"/click",{})
     time.sleep(3)
+    assert js("return !reviewPlayer.paused() && reviewPlayer.currentTime()>5"), "demo must show actual playback"
     js("reviewPlayer.currentTime(13);reviewPlayer.playbackRate(.5);reviewPlayer.userActive(true)")
     time.sleep(3)
     js("reviewPlayer.currentTime(23);reviewPlayer.userActive(true)")
