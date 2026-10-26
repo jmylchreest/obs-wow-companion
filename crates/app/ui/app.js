@@ -87,7 +87,7 @@ function renderContext(){
   updatePlaybackAvailability();
   $('recording-tools').hidden=!recording;
   $('labels-panel').hidden=!recording;
-  
+
   $('clip-options').hidden=recording?.status!=='ready';
   $('export-clip').hidden=recording?.status!=='ready';
   $('export-clip').disabled=!!state.share_running;

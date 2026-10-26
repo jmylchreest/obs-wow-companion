@@ -16,7 +16,7 @@ On Ubuntu 24.04, build dependencies are `libgtk-3-dev libwebkit2gtk-4.1-dev libd
 
 Use [release-plz](https://release-plz.dev/docs/config) to prepare version/changelog changes in a clean committed checkout. Its configuration disables registry publication, tag creation and GitHub release creation; cargo-dist owns binary distribution. Review the root CHANGELOG and keep workspace versions together.
 
-Before tagging, finish the validation matrix, verify native imports preserve existing OBS profiles, test both platform artifacts, and review third-party license notices. The explicit release workflow requires successful tag validation, quality checks and a complete verified package bundle. CI has not yet been run remotely in this repository.
+Before tagging, finish the validation matrix, verify native imports preserve existing OBS profiles, test both platform artifacts, and review third-party license notices. The explicit release workflow requires successful tag validation, quality checks and a complete verified package bundle. Remote CI was first triggered on 2026-10-26. Inspect the current run results before releasing; a triggered run is not a passing gate.
 
 Pushing a `v` tag matching the workspace version invokes the release workflow, which uses cargo-dist artifacts and publishes only after all prerequisites succeed. Preparing files locally does not push a tag or publish a release. No release has been published by this implementation task.
 

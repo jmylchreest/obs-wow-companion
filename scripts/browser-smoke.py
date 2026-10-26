@@ -113,7 +113,7 @@ try:
                 break
         assert js("return state.setup.checks.some(c=>c.id==='directory' && c.status==='pass')") is True
         assert js("return document.getElementById('wizard-apply').hidden") is True
-        assert js("return document.getElementById('folder-help').textContent") == 'Ready.' 
+        assert js("return document.getElementById('folder-help').textContent") == 'Ready.'
     else:
         assert js("return document.getElementById('wizard-apply').disabled") is True
     click('[data-step="2"]')
@@ -524,7 +524,7 @@ try:
       const oldest=[...document.querySelectorAll('.recording')].map(row=>row.dataset.id);
       state=original;document.getElementById('sort').value=originalSort;renderList();
       return JSON.stringify([newest,oldest]);
-    """) == '[["newer-manual","older-active"],["older-active","newer-manual"]]' 
+    """) == '[["newer-manual","older-active"],["older-active","newer-manual"]]'
     assert js("return !document.getElementById('precise')") is True
     assert js("""
       const volume=document.querySelector('.vjs-volume-panel').getBoundingClientRect();

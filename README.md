@@ -8,7 +8,7 @@ A free, open-source companion for World of Warcraft players who use OBS. Automat
 
 ![The recording library and video review player, using fictional encounters and generated test footage](site/assets/review.png)
 
-> **Development preview:** the app works in local Linux testing, but it is not yet a release-qualified product. Windows is a first-release target and still needs native validation. Check the [compatibility matrix](docs/compatibility.md) before relying on it for raid night. Screenshots use synthetic test data, not your logs or live gameplay.
+> **Development preview:** the app works in local Linux testing, but it is still an early build. Windows is a first-release target and is still being tested. Check the [compatibility matrix](docs/compatibility.md) before relying on it for raid night. Screenshots use synthetic test data, not your logs or live gameplay.
 
 ## What you can do
 
@@ -71,7 +71,7 @@ Open a recording, expand **Export**, select a range if needed, choose the audio 
 
 ## Development build
 
-There is no release-qualified installer yet. Successful [GitHub Actions package builds](https://github.com/jmylchreest/obs-wow-companion/actions) provide development artifacts when available. Those are test builds, not a compatibility guarantee.
+There is no stable release yet. Successful [GitHub Actions package builds](https://github.com/jmylchreest/obs-wow-companion/actions) provide development artifacts when available. Those are test builds, not a compatibility guarantee.
 
 To build from source, install **Rust 1.95 or newer**, clone this repository, then run:
 

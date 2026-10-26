@@ -76,7 +76,7 @@ all first-release features are finished.
    and recovery behaviour. Missing functionality remains work, not a waived gate.
 4. Qualify native Windows and GNOME/KDE Wayland capture using appropriate machines,
    and gather permitted real client-mode fixtures. Cross-compilation is insufficient.
-5. Execute remote CI/release jobs once repository access is configured. Publish only
+5. Inspect and resolve the initial remote CI runs, then execute release jobs after qualification. Publish only
    after all mandatory quality/package/runtime gates pass.
 
 No user library, live OBS configuration or recordings were changed by this audit.
