@@ -315,6 +315,66 @@ async fn automatic_lifecycle_tracks_overlap_rejects_backlog_and_respects_pause()
 }
 
 #[tokio::test]
+async fn delayed_start_uses_existing_capture_without_starting_or_deferring_obs() {
+    let root = tempfile::tempdir().expect("root");
+    let listener = Arc::new(TcpListener::bind("127.0.0.1:0").await.expect("listen"));
+    let port = listener.local_addr().expect("port").port();
+    let task = server(listener, Arc::new(Mutex::new("Original".into())), false);
+    let mut engine = engine(root.path(), port);
+    engine
+        .command(json!({"action":"connect"}))
+        .await
+        .expect("connect");
+    engine.setup_completed = true;
+    engine.armed = true;
+    engine.automatic_session = true;
+    let now = Engine::now();
+    let session = Uuid::new_v4();
+    engine.recording = Some(OpenRecording {
+        session,
+        path: None,
+        start_ms: now - 5_000,
+        managed: true,
+        invalid: false,
+    });
+    let delayed = Activity::new(Kind::Raid, "Delayed".into(), now - 30_000, "Retail");
+    engine
+        .activity_started(delayed.clone())
+        .await
+        .expect("no coverage");
+    assert!(engine.automatic_activities.is_empty());
+    engine
+        .db
+        .add_segment(&Segment {
+            id: Uuid::new_v4(),
+            session,
+            path: root.path().join("retained.mkv"),
+            start_ms: now - 40_000,
+            end_ms: now - 5_000,
+            closed: true,
+            managed: true,
+        })
+        .expect("retained segment");
+    engine.guard.stop_pending = true;
+    engine
+        .activity_started(delayed.clone())
+        .await
+        .expect("stopping");
+    assert!(engine.deferred_starts.is_empty());
+    assert!(engine.automatic_activities.is_empty());
+    engine.guard.stop_pending = false;
+    engine
+        .activity_started(delayed.clone())
+        .await
+        .expect("recover delayed start");
+    assert!(engine.automatic_activities.contains(&delayed.id));
+    engine.activity_finished(delayed);
+    assert_eq!(engine.completed_events.len(), 1);
+    assert!(engine.automatic_stop.is_some());
+    task.abort();
+}
+
+#[tokio::test]
 #[allow(clippy::too_many_lines)] // Fake peer and recovery assertions form a single protocol scenario.
 async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
     let root = tempfile::tempdir().expect("root");

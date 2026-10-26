@@ -634,9 +634,32 @@ impl Engine {
             || self.setup["checks"]
                 .as_array()
                 .is_some_and(|checks| checks.iter().any(|check| check["status"] == "fail"))
-            || Self::now().abs_diff(activity.start_ms) > 10_000
         {
             return Ok(());
+        }
+        let now = Self::now();
+        if activity.start_ms > now.saturating_add(10_000) {
+            return Ok(());
+        }
+        if now.saturating_sub(activity.start_ms) > 10_000 {
+            // Backlog may use footage already being captured, but must never start
+            // a new OBS recording (or defer into one) for a historical encounter.
+            let covered = if let Some(recording) = &self.recording {
+                self.armed
+                    && !recording.invalid
+                    && (recording.start_ms <= activity.start_ms
+                        || self.db.segments()?.iter().any(|segment| {
+                            segment.session == recording.session
+                                && segment.closed
+                                && segment.start_ms <= activity.start_ms
+                                && segment.end_ms > activity.start_ms
+                        }))
+            } else {
+                false
+            };
+            if !covered || self.guard.stop_pending || self.stop_when_started {
+                return Ok(());
+            }
         }
         if self.guard.stop_pending || self.stop_when_started {
             self.deferred_starts.push(activity);
