@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Preserve the available part of a delayed encounter when its start is outside retained footage, marking the export truncated instead of dropping the encounter.
+
 - Recover delayed encounter starts when the current OBS session retains footage covering the start, without starting a new recording for historical log events.
 
 - Fix the Rust 1.95 lint failure found by initial Linux/Windows CI; extend Windows validation to native window-close and credential-store round trips.

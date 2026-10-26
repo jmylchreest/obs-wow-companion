@@ -534,3 +534,15 @@ include notify's CC0 dedication, with a package/version-scoped cargo-deny allowa
 Workspace nextest after notification integration: 90 passed, 7 opt-in skipped.
 Rust 1.95 strict Clippy, dependency checks and documentation validation pass.
 The generated notice retains upstream CC0 text verbatim, including its whitespace.
+
+
+### 2026-10-26: Delayed starts outside retained history
+
+A late start now remains eligible when OBS is already capturing valid footage,
+even if the start precedes the retained interval. The controller regression
+finishes a 30-second-old encounter with only its last five seconds retained and
+checks `Coverage::Truncated` plus the actual source origin. Export already adds
+the retained-footage warning to metadata. No existing capture, invalid timelines,
+pause and stopping guards remain in force; old events cannot start new OBS output.
+Capture lifecycle tests pass. Native partial-coverage playback remains part of
+final platform qualification; the complete-coverage native case is recorded above.

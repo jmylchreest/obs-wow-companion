@@ -341,7 +341,28 @@ async fn delayed_start_uses_existing_capture_without_starting_or_deferring_obs()
     engine
         .activity_started(delayed.clone())
         .await
-        .expect("no coverage");
+        .expect("partial coverage");
+    assert!(engine.automatic_activities.contains(&delayed.id));
+    let mut partial = delayed.clone();
+    partial.finish(now, owc_domain::Outcome::Success);
+    engine.activity_finished(partial);
+    let plan = owc_domain::plan_clip(
+        &engine.completed_events[0],
+        &[Segment {
+            id: Uuid::new_v4(),
+            session,
+            path: root.path().join("partial.mkv"),
+            start_ms: now - 5_000,
+            end_ms: now,
+            closed: true,
+            managed: true,
+        }],
+        1_000,
+        0,
+    );
+    assert_eq!(plan.coverage, owc_domain::Coverage::Truncated);
+    assert_eq!(plan.actual_start_ms, Some(now - 5_000));
+    engine.completed_events.clear();
     assert!(engine.automatic_activities.is_empty());
     engine
         .db
