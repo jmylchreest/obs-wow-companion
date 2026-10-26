@@ -621,3 +621,19 @@ lockfiles, dependencies and required validation commands are unchanged. This is
 used for nextest, cargo-deny, cargo-dist and release-plz. Workflow lint and all
 seven publication-policy tests pass. Remote cache restore/save behavior still
 needs its first workflow run; run 40374920263 predates this change.
+
+
+### 2026-10-26: Remote OBS qualification and evidence collection
+
+Dispatched OBS integration run 40375838240 on `ci/release-validation`, independently
+of the active quality run. This uses a fresh Ubuntu runner and the official OBS
+PPA; completion is pending, so it is not qualification evidence yet.
+
+The evidence collector now includes an explicit list of nested OBS reports:
+readiness, state, queue latency, complete/partial delayed-start sidecars and the
+private fixture event log. Local collection preserved the measured partial-start
+report byte-for-byte and excluded library databases and OBS config files.
+The probe preserves captured output on timeout; its bound is now four minutes to
+accommodate the expanded real-time scenarios and slower hosted encoding. The
+already-running remote workflow predates these collection changes. Python syntax
+validation and all seven CI policy tests pass.

@@ -34,7 +34,13 @@ try:
  obs=subprocess.Popen(["obs","--multi","--disable-shutdown-check","--skip-plugin-load-warning"],env=env,stdout=olog,stderr=olog)
  time.sleep(6)
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"screen.png")],check=True)
- out=subprocess.run(["target/debug/examples/obs_probe",str(root/"videos")],capture_output=True,text=True,timeout=150,env=env)
+ try:
+  out=subprocess.run(["target/debug/examples/obs_probe",str(root/"videos")],capture_output=True,text=True,timeout=240,env=env)
+ except subprocess.TimeoutExpired as error:
+  def decode(value):return value.decode(errors="replace") if isinstance(value,bytes) else (value or "")
+  (root/"probe.log").write_text(decode(error.stdout)+decode(error.stderr)+"\nProbe exceeded 240 seconds.\n")
+  print("Timed out; evidence:",root)
+  raise
  (root/"probe.log").write_text(out.stdout+out.stderr)
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"after.png")],check=True)
  print("Evidence:",root);print(out.stdout[-9000:]);print(out.stderr[-1000:])

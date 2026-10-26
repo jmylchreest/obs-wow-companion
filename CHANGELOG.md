@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Preserve native OBS probe output on timeout and include nested timing/coverage reports in CI artifacts.
+
 - Correct Windows validation fixtures for event-log resizing, native versus Wine paths, and observing in-progress ZIP writes through a file handle.
 
 - Preserve the available part of a delayed encounter when its start is outside retained footage, marking the export truncated instead of dropping the encounter.

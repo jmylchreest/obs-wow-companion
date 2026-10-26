@@ -134,9 +134,16 @@ def evidence():
     count = 0
     for prefix in ["owc-desktop-", "owc-browser-", "owc-recovery-", "owc-obs-", "owc-service-", "owc-installer-"]:
         for root in Path(tempfile.gettempdir()).glob(prefix + "*"):
-            for source in root.iterdir():
-                if source.is_file() and source.suffix in [".log", ".png", ".json"]:
-                    output = destination / root.name / source.name
+            candidates = list(root.iterdir())
+            if prefix == "owc-obs-":
+                candidates.extend(root / name for name in [
+                    "companion/evidence.json", "companion/delayed-start.json",
+                    "companion/partial-start.json", "companion/queue-latency.json",
+                    "companion/events.jsonl", "videos/readiness.json",
+                ])
+            for source in candidates:
+                if source.is_file() and source.suffix in [".log", ".png", ".json", ".jsonl"]:
+                    output = destination / root.name / source.relative_to(root)
                     output.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, output)
                     count += 1
