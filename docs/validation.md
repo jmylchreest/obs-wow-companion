@@ -576,3 +576,18 @@ recovery with orphan-encoder isolation.
 [Archive checksum and evidence paths](evidence/package-linux-2026-10-26.json)
 identify this exact artifact. This is local-host evidence with installed system
 dependencies; clean Linux and native Windows package jobs remain release gates.
+
+
+### 2026-10-26: Native Windows test findings
+
+Windows job 121745891174 in run 40372211349 passed lint and 84 of 87 tests,
+with three fixture failures. Event-log rotation used an append-only handle for
+`set_len`, which Windows rejects; the fixture now opens for writing, seeks to the
+end and closes the handle before rotation. Wine dosdevices path assertions are
+Unix-only, with a native drive-path assertion on Windows. ZIP cancellation now
+queries size through an opened handle instead of a potentially cached directory
+entry, and requires the first MiB of video before cancelling.
+
+All three corrected tests pass on Linux and strict Rust 1.95 lint passes. Native
+Windows rerun is still required; these changes are not a passing Windows result.
+The failed quality job prevents packaging and release publication as intended.

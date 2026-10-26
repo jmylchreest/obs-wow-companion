@@ -84,6 +84,7 @@ impl EventLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Seek, SeekFrom};
     #[test]
     fn bounded_history_survives_restart_rotation_and_partial_lines() {
         let root = tempfile::tempdir().expect("root");
@@ -94,11 +95,13 @@ mod tests {
         assert_eq!(log.entries.len(), 500);
         assert_eq!(EventLog::new(root.path()).entries.len(), 500);
         let mut file = std::fs::OpenOptions::new()
-            .append(true)
+            .write(true)
             .open(&log.path)
             .expect("file");
+        file.seek(SeekFrom::End(0)).expect("append position");
         file.write_all(b"{partial\n").expect("partial");
         file.set_len(MAX_BYTES).expect("size");
+        drop(file);
         log.push("OBS", "info", "Stopped");
         assert!(root.path().join("events.previous.jsonl").exists());
         assert_eq!(

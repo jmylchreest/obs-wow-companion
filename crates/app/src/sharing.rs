@@ -390,14 +390,18 @@ mod tests {
                     b"poster",
                 )
             });
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            // Directory-entry sizes may stay cached while a Windows writer is open.
+            // Query a file handle and require the first video chunk, not just headers.
             let started = loop {
                 let started = std::fs::read_dir(root.path())
                     .expect("directory")
                     .filter_map(Result::ok)
                     .any(|entry| {
                         entry.path() != video
-                            && entry.metadata().is_ok_and(|metadata| metadata.len() > 0)
+                            && std::fs::File::open(entry.path())
+                                .and_then(|file| file.metadata())
+                                .is_ok_and(|metadata| metadata.len() >= 1024 * 1024)
                     });
                 if started || std::time::Instant::now() >= deadline {
                     break started;

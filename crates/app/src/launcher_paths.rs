@@ -159,13 +159,21 @@ mod tests {
         let database = field(1, &product);
         assert_eq!(product_paths(&database), [r"D:\Games\World of Warcraft"]);
         assert!(product_paths(&database[..database.len() - 1]).is_empty());
+        #[cfg(unix)]
+        {
+            assert_eq!(
+                resolve_path(r"C:\Games\WoW", Some(Path::new("/prefix"))),
+                Some(PathBuf::from("/prefix/drive_c/Games/WoW"))
+            );
+            assert_eq!(
+                resolve_path(r"D:\Games\WoW", Some(Path::new("/prefix"))),
+                Some(PathBuf::from("/prefix/dosdevices/d:/Games/WoW"))
+            );
+        }
+        #[cfg(windows)]
         assert_eq!(
-            resolve_path(r"C:\Games\WoW", Some(Path::new("/prefix"))),
-            Some(PathBuf::from("/prefix/drive_c/Games/WoW"))
-        );
-        assert_eq!(
-            resolve_path(r"D:\Games\WoW", Some(Path::new("/prefix"))),
-            Some(PathBuf::from("/prefix/dosdevices/d:/Games/WoW"))
+            resolve_path(r"D:\Games\WoW", None),
+            Some(PathBuf::from(r"D:\Games\WoW"))
         );
         assert!(resolve_path("relative/path", None).is_none());
         assert!(fields(&[0xff; 10]).is_none());

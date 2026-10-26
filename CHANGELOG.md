@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Correct Windows validation fixtures for event-log resizing, native versus Wine paths, and observing in-progress ZIP writes through a file handle.
+
 - Preserve the available part of a delayed encounter when its start is outside retained footage, marking the export truncated instead of dropping the encounter.
 
 - Recover delayed encounter starts when the current OBS session retains footage covering the start, without starting a new recording for historical log events.
