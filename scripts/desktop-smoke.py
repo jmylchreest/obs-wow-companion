@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the native window on a private X display and verify its local API."""
+"""Verify native desktop startup and OS window-close on Linux or Windows."""
 import ctypes
 import http.cookiejar
 import json
@@ -57,22 +57,49 @@ def close_native_window(display_name):
     finally:
         x11.XCloseDisplay(connection)
 
+def close_windows_window(pid):
+    """Send WM_CLOSE only to the window belonging to this test process."""
+    from ctypes import wintypes
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+    user32.EnumWindows.restype = wintypes.BOOL
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.PostMessageW.restype = wintypes.BOOL
+    matches = []
+    @callback_type
+    def visit(window, _):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+        if owner.value == pid:
+            title = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(window, title, len(title))
+            if title.value == "OBS WoW Companion":
+                matches.append(window)
+        return True
+    assert user32.EnumWindows(visit, 0)
+    assert len(matches) == 1, "Expected one native companion window owned by the test process"
+    assert user32.PostMessageW(matches[0], 0x0010, 0, 0), "WM_CLOSE failed"
+
+
 root = Path(tempfile.mkdtemp(prefix="owc-desktop-"))
 display = ":122"
-if Path("/tmp/.X122-lock").exists():
+if os.name != "nt" and Path("/tmp/.X122-lock").exists():
     raise SystemExit("Private test display is already in use")
 env = os.environ.copy()
 env.update(DISPLAY=display, GDK_BACKEND="x11", LIBGL_ALWAYS_SOFTWARE="1", XDG_CONFIG_HOME=str(root / "config"))
 with (root / "xvfb.log").open("w") as xlog, (root / "app.log").open("w") as log:
-    xvfb = subprocess.Popen(["Xvfb", display, "-screen", "0", "1440x1000x24", "-nolisten", "tcp"], stdout=xlog, stderr=xlog)
+    xvfb = None if os.name == "nt" else subprocess.Popen(["Xvfb", display, "-screen", "0", "1440x1000x24", "-nolisten", "tcp"], stdout=xlog, stderr=xlog)
     app = None
     try:
         time.sleep(1)
-        if xvfb.poll() is not None:
+        if xvfb is not None and xvfb.poll() is not None:
             raise RuntimeError("Xvfb failed")
-        app = subprocess.Popen([os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion"), "--data-dir", str(root / "data")], env=env, stdout=log, stderr=log)
+        app = subprocess.Popen([os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion.exe" if os.name == "nt" else "target/debug/obs-wow-companion"), "--data-dir", str(root / "data")], env=env, stdout=log, stderr=log)
         url = None
-        for _ in range(50):
+        for _ in range(150):
             time.sleep(0.2)
             match = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+", (root / "app.log").read_text())
             if match:
@@ -100,20 +127,27 @@ with (root / "xvfb.log").open("w") as xlog, (root / "app.log").open("w") as log:
             raise AssertionError("Cross-origin mutation accepted")
         except urllib.error.HTTPError as error:
             assert error.code == 403
-        for enabled in (True, False):
+        # Linux uses a private XDG directory. Windows known-folder APIs do not
+        # honour an APPDATA override, so do not alter the user's Startup folder.
+        for enabled in (() if os.name == "nt" else (True, False)):
             request = urllib.request.Request(base + "/api/action", data=json.dumps({"action":"autostart", "enabled":enabled}).encode(), headers={"Content-Type":"application/json", "X-OWC-Request":"1"})
             client.open(request).read()
             assert (root / "config/autostart/obs-wow-companion.desktop").exists() == enabled
         time.sleep(4)
-        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "x11grab", "-video_size", "1440x1000", "-i", display, "-frames:v", "1", str(root / "desktop.png")], check=True)
+        if os.name != "nt":
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "x11grab", "-video_size", "1440x1000", "-i", display, "-frames:v", "1", str(root / "desktop.png")], check=True)
         assert app.poll() is None, (root / "app.log").read_text()
         assert "Gtk-WARNING" not in (root / "app.log").read_text(), (root / "app.log").read_text()
-        close_native_window(display)
+        if os.name == "nt":
+            close_windows_window(app.pid)
+        else:
+            close_native_window(display)
         assert app.wait(timeout=10) == 0
         print(f"Desktop/API and native window-close quit passed; evidence: {root}")
     finally:
         if app is not None and app.poll() is None:
             app.terminate()
             app.wait(timeout=5)
-        xvfb.terminate()
-        xvfb.wait(timeout=5)
+        if xvfb is not None:
+            xvfb.terminate()
+            xvfb.wait(timeout=5)

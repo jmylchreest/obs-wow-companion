@@ -730,7 +730,7 @@ mod tests {
             owc_library::Library::open(&root.path().join("library.sqlite")).expect("database");
         let (bus, mut receiver) = EventBus::new();
         let began = std::time::Instant::now();
-        let task = spawn(config, initial, 1, Duration::from_secs(300), false, bus);
+        let task = spawn(config, initial, 1, Duration::from_mins(5), false, bus);
         let mut batches = 0;
         let mut starts = 0;
         let mut deaths = 0;

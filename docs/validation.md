@@ -479,3 +479,22 @@ fictional encounters, produced by `scripts/capture-showcase.py`. No user library
 or combat logs were copied. Desktop and 390px mobile rendering, local assets and
 anchor links pass (`/tmp/owc-site-_j7b_ob9`). Captures were visually reviewed.
 The website is static and uses no analytics or external font dependencies.
+
+
+### 2026-10-26: Initial remote CI failure and expanded Windows checks
+
+Main-branch run 40369293609 passed dependency/license/workflow policy, but both
+native compiler jobs stopped at Rust 1.95's duration-suboptimal-units lint in the
+watcher fixture. The failure was reproduced with the exact pinned toolchain
+locally and fixed without suppressing the lint.
+
+The desktop smoke script now supports a PID-scoped Windows WM_CLOSE request,
+rather than only X11 WM_DELETE_WINDOW. It checks authenticated local service
+access and requires the native window's JavaScript quit path to exit the process.
+Windows deliberately skips the Linux autostart test because Windows known-folder
+APIs cannot be redirected with XDG environment variables. The existing Linux path
+passes after this change (`/tmp/owc-desktop-7nj49np5`).
+
+The package workflow now runs this desktop check on Windows, and the quality
+workflow opts into the existing unique-scope credential-store round trip on its
+disposable Windows runner. Their inclusion is not yet a passing runtime result.

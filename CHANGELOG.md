@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Fix the Rust 1.95 lint failure found by initial Linux/Windows CI; extend Windows validation to native window-close and credential-store round trips.
+
 - Quit and window-close now stop owned capture and cancel unfinished encoding automatically, retaining queued clips for restart without requiring Pause or waiting for a full export.
 
 - Wait for OBS stop confirmation before asserting scene restoration in the native integration probe; early fragment exports can become ready before recording stops.

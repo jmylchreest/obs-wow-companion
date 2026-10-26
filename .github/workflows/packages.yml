@@ -38,6 +38,9 @@ jobs:
       - name: Native Linux desktop
         if: runner.os == 'Linux'
         run: dbus-run-session -- python3 scripts/desktop-smoke.py
+      - name: Native Windows desktop
+        if: runner.os == 'Windows'
+        run: python scripts/desktop-smoke.py
       - name: WebKit playback
         if: runner.os == 'Linux'
         run: dbus-run-session -- python3 scripts/browser-smoke.py

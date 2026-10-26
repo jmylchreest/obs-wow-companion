@@ -23,6 +23,11 @@ jobs:
       - name: Isolated Linux password store
         if: runner.os == 'Linux'
         run: python3 scripts/credential-smoke.py
+      - name: Windows password store
+        if: runner.os == 'Windows'
+        env:
+          OWC_TEST_PRIVATE_KEYRING: "1"
+        run: cargo test -p owc-app --locked credentials::tests::system_store_round_trip -- --ignored
       - run: cargo test --workspace --doc --locked
       - run: python scripts/check-docs.py
       - name: Parser benchmark
