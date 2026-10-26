@@ -1,0 +1,38 @@
+# Warcraft Recorder parity and housekeeping
+
+Comparison baseline: Warcraft Recorder 7.13.4, commit `2643938980b9fe2031aa17275d3ee528bd2fd20e`, inspected locally. This is a feature comparison against that revision, not a claim about every future WCR release or proven gameplay equivalence.
+
+| Area | Companion status |
+| --- | --- |
+| Automatic activities | Raid, whole Mythic+, arena/skirmish, Shuffle and battleground/Classic handlers implemented; synthetic fixtures tested. Real-client coverage remains unqualified. |
+| Delayed starts and padding | Encounter-triggered OBS capture with configurable pre/post footage from retained sources; missing pre-roll is labelled and cannot be fabricated. |
+| Manual clips and live review | Implemented; live review uses closed segments rather than the open recording file. |
+| Library/review | Search/filter/sort, metadata, death/boss markers, speed, audio-track selection, tags, favourites and protection implemented. |
+| Trimming/export | Precise re-encoding and keyframe-aligned fast cuts; multi-track output and actual fast-cut origin retained. |
+| Housekeeping | Managed spool expiry, oldest-first library quota, preview-cache cleanup and interrupted-export recovery implemented. Details below. |
+| Capture, audio mixing, encoders, masks/overlays | Supplied by separately installed OBS; configured there rather than rebuilt inside the companion. |
+| Platforms | Linux native UI/OBS and synthetic playback exercised; Windows cross-build/core Wine tests pass. Native Windows/MSVC and real Wayland gameplay validation remain. |
+| Background operation | Opt-in startup implemented. Closing or Quit exits through bounded shutdown. In-app shortcuts; no global shortcuts or tray integration. |
+| WCR cloud/guild sharing/video chat | Excluded; no WCR backend integration. |
+| Drawing, multi-POV editing, WCR-library import | Deferred. |
+| Boss-health/progress overlays, special world/delve cases, localisation, macOS | Deferred; no equivalent first-release support claim. |
+
+The [full specification](specification.md) retains all agreed former MVP and 1.0 requirements for the first public release. Implementation coverage is broader than the subset validated with real software, and validated software behavior is broader than validated gameplay. The [compatibility matrix](compatibility.md) records those distinctions.
+
+## What happens to generated files
+
+| Files | Implemented policy | Default |
+| --- | --- | --- |
+| Managed OBS source segments | Delete registered closed segments outside retained history when no active/pending work needs them. Never delete an open file or an external observed recording. | 60-second split requests, 120-second idle history, 30 GiB spool budget |
+| Exported encounter videos | When over quota, remove oldest eligible ready recordings and their JSON sidecars. Protected clips and sources referenced by unfinished trims are excluded. Cleanup waits while export/preview work is running. | 100 GiB library quota |
+| Playback previews | Remove oldest recognised cached previews above the cache budget; preserve the currently selected preview. Remove recognised incomplete previews when idle. | Smaller of 512 MiB or one quarter of library quota |
+| Export intermediates | Remove temporary job files after success/failure. A crash retry uses a new attempt directory so an old worker cannot overwrite it, and attempts cleanup afterward. | One export at a time |
+| Crash leftovers/unrecognised files | Preserve uncertain/open/unindexed files for manual recovery. The app does not sweep arbitrary videos from a folder. | No automatic destructive cleanup |
+
+Checks run periodically while the companion is running. Low free space or excess spool usage stops only a clearly owned recording; it preserves pinned media. The minimum-free-space threshold defaults to **2 GiB on the spool filesystem**. It is not a hard reservation across all filesystems.
+
+These budgets are soft: a long active dungeon, protected clips, failed exports, temporary audio/video and the current preview can exceed them. Failed jobs keep their sources pinned until retried or deleted. Favourites are tags, not protection. A stale/crashed job that is never retried can leave staging files for manual recovery; disk-exhaustion handling still needs end-to-end qualification.
+
+WCR's inspected [DiskSizeMonitor](https://github.com/aza547/wow-recorder/blob/2643938980b9fe2031aa17275d3ee528bd2fd20e/src/storage/DiskSizeMonitor.ts) also removes old unprotected recordings, aims for 95% of its configured limit, and supports `0` for unlimited storage. This companion currently requires positive spool/library quotas and evicts to the configured library limit. It additionally has explicit ownership/source-pin constraints because OBS is a separate application. Neither comparison implies that protected footage must be deleted to meet a quota.
+
+Regression tests cover managed versus external cleanup, protected records, failed-trim source pins, preview ownership and process-crash recovery. Full disk-pressure testing and long-session qualification remain release gates. See [recovery](recovery.md) for user-facing behavior.

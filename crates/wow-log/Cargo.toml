@@ -1,0 +1,28 @@
+[package]
+name = "owc-wow-log"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+owc-domain = { path = "../domain" }
+
+[target.'cfg(windows)'.dependencies]
+file-id.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+criterion.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "ingestion"
+harness = false

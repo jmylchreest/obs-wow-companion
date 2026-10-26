@@ -1,0 +1,38 @@
+{
+  "closure_source": "independent OBS RecordStateChanged STOPPED subscription",
+  "closure_to_export_observed_ms": 64.535745,
+  "obs": {
+    "obsVersion": "32.2.2",
+    "obsWebSocketVersion": "5.7.4",
+    "platform": "cachyos",
+    "platformDescription": "CachyOS",
+    "rpcVersion": 1,
+    "supportedImageFormats": [
+      "bmp",
+      "cur",
+      "icns",
+      "ico",
+      "jfif",
+      "jpeg",
+      "jpg",
+      "pbm",
+      "pgm",
+      "png",
+      "ppm",
+      "tif",
+      "tiff",
+      "wbmp",
+      "webp",
+      "xbm",
+      "xpm"
+    ]
+  },
+  "passed": true,
+  "poll_interval_ms": 100,
+  "queue_observation": "first exporting or ready UI snapshot",
+  "scenario": "single-file automatic raid, fast copy, idle export worker",
+  "threshold_ms": 2000,
+  "date": "2026-10-26",
+  "evidence_directory": "/tmp/owc-obs-dg4_kws1",
+  "scope": "Linux X11 private Xvfb, synthetic video/audio, idle worker; not a Windows or concurrent-load guarantee"
+}

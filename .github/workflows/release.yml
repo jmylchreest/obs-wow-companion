@@ -1,0 +1,47 @@
+# Maintained explicitly; cargo-dist builds archives/installers, not this workflow.
+name: Release
+on:
+  push:
+    tags: ['v[0-9]*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - run: python3 scripts/ci-tools.py release-tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+  quality:
+    needs: validate
+    uses: ./.github/workflows/quality.yml
+  packages:
+    needs: [validate, quality]
+    uses: ./.github/workflows/packages.yml
+  publish:
+    needs: [validate, quality, packages]
+    # Default success() is deliberate: skipped or failed prerequisites cannot publish.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-bundle
+          path: release-bundle
+      - name: Publish verified bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/ci-tools.py publish release-bundle

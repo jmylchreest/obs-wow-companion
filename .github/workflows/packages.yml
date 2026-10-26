@@ -1,0 +1,119 @@
+name: Packages
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  local:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/build-environment
+      - run: cargo install cargo-dist --version 0.32.0 --locked
+      - name: Build archive
+        env:
+          DIST_TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          python -c "import shutil; shutil.rmtree('target/distrib', ignore_errors=True)"
+          dist build --artifacts=local --target "$DIST_TARGET" --output-format=json > local-dist-manifest.json
+          mv local-dist-manifest.json "target/distrib/$DIST_TARGET-dist-manifest.json"
+      - name: Verify extracted package
+        env:
+          DIST_TARGET: ${{ matrix.target }}
+        run: python scripts/ci-tools.py package target/distrib
+      - name: Native packaged service and media
+        run: python scripts/service-smoke.py
+      - name: Native Linux desktop
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- python3 scripts/desktop-smoke.py
+      - name: WebKit playback
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- python3 scripts/browser-smoke.py
+      - name: Process crash recovery
+        if: runner.os == 'Linux'
+        run: python3 scripts/recovery-smoke.py
+      - name: Collect probe evidence
+        if: always()
+        run: python scripts/ci-tools.py evidence
+      - name: Probe evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: probes-${{ matrix.target }}
+          path: target/ci-evidence
+          retention-days: 14
+      - name: Verified archives
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: package-${{ matrix.target }}
+          path: |
+            target/distrib/*.tar.xz
+            target/distrib/*.zip
+            target/distrib/*.sha256
+            target/distrib/*-dist-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+  bundle:
+    needs: local
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: target/distrib
+      - run: rustup toolchain install 1.95 --profile minimal && rustup default 1.95
+      - run: cargo install cargo-dist --version 0.32.0 --locked
+      - run: dist build --artifacts=global
+      - name: Verify full release bundle
+        run: python3 scripts/ci-tools.py bundle target/distrib
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-bundle
+          path: target/release-bundle
+          if-no-files-found: error
+          retention-days: 14
+  installers:
+    needs: bundle
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/build-environment
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-bundle
+          path: release-bundle
+      - name: Private install and installed service smoke test
+        run: python scripts/installer-smoke.py release-bundle
+      - name: Collect installer evidence
+        if: always()
+        run: python scripts/ci-tools.py evidence
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: installer-${{ runner.os }}
+          path: target/ci-evidence
+          retention-days: 14

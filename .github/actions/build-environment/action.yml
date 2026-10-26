@@ -1,0 +1,31 @@
+name: Build environment
+description: Pinned Rust toolchain, native dependencies and Cargo cache
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: "3.12"
+    - name: Linux dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config libdbus-1-dev ffmpeg xvfb webkit2gtk-driver gstreamer1.0-libav gstreamer1.0-plugins-good dbus-x11 gnome-keyring
+    - name: Windows media tools
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: choco install ffmpeg --no-progress -y
+    - name: Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install 1.95 --profile minimal --component rustfmt --component clippy
+        rustup default 1.95
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ runner.os }}-1.95-${{ hashFiles('Cargo.lock', '.github/actions/build-environment/action.yml') }}
+        restore-keys: cargo-${{ runner.os }}-1.95-

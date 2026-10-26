@@ -1,0 +1,66 @@
+[package]
+name = "owc-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+description = "Local OBS companion for automatic World of Warcraft encounter recordings"
+
+[package.metadata.dist]
+dist = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+tempfile.workspace = true
+futures-util.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+axum.workspace = true
+tower-http.workspace = true
+tower.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+fs2.workspace = true
+directories-next.workspace = true
+owc-domain = { path = "../domain" }
+owc-wow-log = { path = "../wow-log" }
+owc-obs-client = { path = "../obs-client" }
+owc-capture = { path = "../capture" }
+owc-media = { path = "../media" }
+owc-library = { path = "../library" }
+keyring = { version = "3.6.3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
+steamlocate = "2.1.1"
+zip = { version = "9.1.2", default-features = false }
+
+[dev-dependencies]
+tokio-tungstenite.workspace = true
+
+[[bin]]
+name = "obs-wow-companion"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:wry", "dep:tao", "dep:rfd"]
+
+[dependencies.wry]
+workspace = true
+optional = true
+
+[dependencies.tao]
+workspace = true
+optional = true
+
+[dependencies.rfd]
+version = "0.17.2"
+optional = true

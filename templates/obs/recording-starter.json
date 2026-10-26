@@ -1,0 +1,49 @@
+{
+  "recipe_version": 1,
+  "status": "design-only",
+  "format": "obs-wow-companion-setup-recipe",
+  "obs_importable": false,
+  "profile_name": "WoW Companion",
+  "scene_collection_name": "WoW Companion",
+  "scene_name": "WoW",
+  "video": {
+    "suggested_output_width": 1920,
+    "suggested_output_height": 1080,
+    "suggested_fps": 60,
+    "codec_candidate": "h264",
+    "encoder": "select-on-this-machine",
+    "quality": "select-for-chosen-encoder"
+  },
+  "recording": {
+    "output_mode_candidate": "advanced-standard",
+    "container_candidate": "mkv",
+    "directory": "select-dedicated-shared-directory",
+    "segmentation_owner": "companion-when-managed",
+    "suggested_segment_seconds": 60,
+    "suggested_idle_history_seconds": 120
+  },
+  "audio": {
+    "codec_candidate": "aac",
+    "game_device": "select-on-this-machine",
+    "microphone": "optional-select-on-this-machine",
+    "tracks": [
+      { "number": 1, "purpose": "game-and-microphone-mix" },
+      { "number": 2, "purpose": "game-only" },
+      { "number": 3, "purpose": "microphone-only-if-enabled" }
+    ]
+  },
+  "capture_source": "select-for-platform-and-desktop",
+  "connection": {
+    "host": "127.0.0.1",
+    "suggested_port": 4455,
+    "authentication": "configure-separately-in-obs-and-companion"
+  },
+  "readiness_checks": [
+    "capture-visible-in-preview",
+    "audio-tracks-play-back-correctly",
+    "recording-directory-accessible-to-both-apps",
+    "split-capabilities-and-output-configuration-validated",
+    "combat-log-activity-observed",
+    "diagnostic-clip-verified"
+  ]
+}

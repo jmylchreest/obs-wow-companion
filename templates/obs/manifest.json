@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "OWC Starter",
+  "obs_version": "32.2.2",
+  "profile_directory": "OWC-Starter",
+  "scene_collection": "OWC-Starter-scenes.json",
+  "qualification": {
+    "linux_native_load_record_split_export": "passed",
+    "linux_menu_import_preservation_rollback": "passed",
+    "windows_import": "pending",
+    "physical_game_and_audio_sources": "must be configured and verified locally"
+  },
+  "recording": {
+    "container": "mkv",
+    "video_encoder": "obs_x264",
+    "audio_encoder": "ffmpeg_aac",
+    "audio_tracks": [1, 2],
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "split_mode": "manual"
+  }
+}

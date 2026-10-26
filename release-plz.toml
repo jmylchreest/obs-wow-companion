@@ -1,0 +1,14 @@
+[workspace]
+publish = false
+git_only = true
+git_release_enable = false
+git_tag_enable = false
+release_always = false
+semver_check = false
+changelog_update = false
+
+[[package]]
+name = "owc-app"
+changelog_update = true
+changelog_path = "CHANGELOG.md"
+changelog_include = ["owc-domain", "owc-wow-log", "owc-obs-client", "owc-capture", "owc-media", "owc-library"]

@@ -1,0 +1,13 @@
+/target/
+/.aide/
+/.agents/
+/.codex/
+/.aws/
+/dist/
+*.log
+!crates/wow-log/tests/fixtures/*.log
+*.sqlite*
+*.partial.*
+
+__pycache__/
+*.pyc
