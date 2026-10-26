@@ -20,7 +20,7 @@ with (root / "app.log").open("w") as log:
         url = None
         for _ in range(100):
             time.sleep(0.1)
-            text = (root / "app.log").read_text()
+            text = (root / "app.log").read_text(encoding="utf-8")
             match = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+", text)
             if match:
                 url = match.group()
@@ -60,7 +60,7 @@ with (root / "app.log").open("w") as log:
         action({"action":"quit"})
         assert app.wait(timeout=10) == 0
         events.close()
-        (root / "result.json").write_text(json.dumps(result, indent=2))
+        (root / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(f"Packaged service authentication, two-track media and shutdown passed: {root}")
     finally:
         if app.poll() is None:

@@ -23,7 +23,7 @@ def artifact_names():
         for target, suffix in TARGETS.items() for tail in ["", ".sha256"]]
 
 def version():
-    return tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+    return tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))["workspace"]["package"]["version"]
 
 def release_tag(tag):
     expected = "v" + version()
@@ -37,7 +37,7 @@ def checksum(path):
 
 def verified_archive(directory, target):
     path = directory / ("owc-app-" + target + TARGETS[target])
-    expected = Path(str(path) + ".sha256").read_text().split()[0]
+    expected = Path(str(path) + ".sha256").read_text(encoding="utf-8").split()[0]
     if checksum(path) != expected:
         raise ValueError(f"Checksum mismatch: {path.name}")
     return path
@@ -82,11 +82,11 @@ def bundle(directory):
     for filename in required:
         if not (directory / filename).is_file():
             raise ValueError(f"Missing release artifact: {filename}")
-    if checksum(directory / "source.tar.gz") != (directory / "source.tar.gz.sha256").read_text().split()[0]:
+    if checksum(directory / "source.tar.gz") != (directory / "source.tar.gz.sha256").read_text(encoding="utf-8").split()[0]:
         raise ValueError("Source archive checksum mismatch")
     for target, installer in [("x86_64-unknown-linux-gnu", "owc-app-installer.sh"),
                               ("x86_64-pc-windows-msvc", "owc-app-installer.ps1")]:
-        text = (directory / installer).read_text()
+        text = (directory / installer).read_text(encoding="utf-8")
         url = "https://github.com/jmylchreest/obs-wow-companion/releases/download/v" + version()
         if url not in text or checksum(verified_archive(directory, target)) not in text:
             raise ValueError(f"Installer lacks the release URL or embedded archive checksum: {installer}")
@@ -100,14 +100,14 @@ def bundle(directory):
         shutil.copy2(directory / filename, destination / filename)
         digests[filename] = checksum(destination / filename)
     metadata = {"schema_version": 1, "version": version(), "tag": "v" + version(), "files": digests}
-    (destination / "bundle.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    (destination / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in sorted(digests.items())))
-    (destination / "release-notes.md").write_text(Path("CHANGELOG.md").read_text())
+    (destination / "bundle.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    (destination / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in sorted(digests.items())), encoding="utf-8")
+    (destination / "release-notes.md").write_text(Path("CHANGELOG.md").read_text(encoding="utf-8"), encoding="utf-8")
     print(f"Verified both platform archives and installers: {destination}")
 
 def publish(directory, tag):
     release_tag(tag)
-    metadata = json.loads((directory / "bundle.json").read_text())
+    metadata = json.loads((directory / "bundle.json").read_text(encoding="utf-8"))
     if metadata["tag"] != tag or metadata["version"] != version():
         raise ValueError("Bundle version does not match release tag")
     if metadata.get("schema_version") != 1 or set(metadata["files"]) != set(artifact_names()):
@@ -118,7 +118,7 @@ def publish(directory, tag):
     for target in TARGETS:
         verified_archive(directory, target)
     checksums = "".join(f"{digest}  {name}\n" for name, digest in sorted(metadata["files"].items()))
-    if (directory / "SHA256SUMS").read_text() != checksums:
+    if (directory / "SHA256SUMS").read_text(encoding="utf-8") != checksums:
         raise ValueError("Release checksum manifest differs from verified bundle")
     command = ["gh", "release", "create", tag, "--verify-tag", "--title", tag,
                "--notes-file", str(directory / "release-notes.md")]
@@ -147,7 +147,7 @@ def evidence():
                     output.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, output)
                     count += 1
-    (destination / "summary.txt").write_text(f"Collected {count} private test logs/screenshots.\n")
+    (destination / "summary.txt").write_text(f"Collected {count} private test logs/screenshots.\n", encoding="utf-8")
 
 def actionlint():
     url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"

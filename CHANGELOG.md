@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Preserve source timestamp precision during precise exports, avoiding a lost frame at each fragment boundary with FFmpeg 6.
+- Read and write validation files explicitly as UTF-8 on Windows.
+
 - Preserve native OBS probe output on timeout and include nested timing/coverage reports in CI artifacts.
 
 - Correct Windows validation fixtures for event-log resizing, native versus Wine paths, and observing in-progress ZIP writes through a file handle.

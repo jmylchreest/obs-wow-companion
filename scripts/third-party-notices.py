@@ -24,7 +24,7 @@ for target in ("x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"):
 sections = ["Third-party dependency notices\nGenerated from Cargo.lock and fetched registry source packages.\nSystem and separately installed applications are not bundled.\n"]
 missing = []
 upstream = root / "licenses/upstream"
-fallbacks = json.loads((upstream / "manifest.json").read_text())
+fallbacks = json.loads((upstream / "manifest.json").read_text(encoding="utf-8"))
 for package in sorted(metadata["packages"], key=lambda p:(p["name"],p["version"])):
     if package["source"] is None or package["id"] not in included:
         continue
@@ -48,9 +48,9 @@ for package in sorted(metadata["packages"], key=lambda p:(p["name"],p["version"]
         else:
             missing.append(f"{package['name']} {package['version']}: {directory}")
     for path in sorted(set(licenses)):
-        sections.append(f"\n--- {path.relative_to(directory)} ---\n" + path.read_text(errors="replace"))
-sections.append("\n" + "=" * 72 + "\nVideo.js classic 8.24.1 (HTML5 core player)\nLicense: Apache-2.0\nSource: https://github.com/videojs/video.js/tree/v8.24.1\n" + (root / "crates/app/ui/vendor/VIDEOJS-LICENSE").read_text())
-(root / "THIRD-PARTY-NOTICES.txt").write_text("\n".join(sections))
+        sections.append(f"\n--- {path.relative_to(directory)} ---\n" + path.read_text(errors="replace", encoding="utf-8"))
+sections.append("\n" + "=" * 72 + "\nVideo.js classic 8.24.1 (HTML5 core player)\nLicense: Apache-2.0\nSource: https://github.com/videojs/video.js/tree/v8.24.1\n" + (root / "crates/app/ui/vendor/VIDEOJS-LICENSE").read_text(encoding="utf-8"))
+(root / "THIRD-PARTY-NOTICES.txt").write_text("\n".join(sections), encoding="utf-8")
 if missing:
     sys.exit("Missing bundled license files; review these packages:\n" + "\n".join(missing))
 print("Third-party notices generated with license files for every registry package")

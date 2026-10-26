@@ -39,7 +39,7 @@ try:
                   "--no-open","--data-dir",str(root/"data")],"app.log")
     launch(["WebKitWebDriver","--port=4459","--host=127.0.0.1"],"driver.log")
     time.sleep(2)
-    url = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+",(root/"app.log").read_text()).group()
+    url = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+",(root/"app.log").read_text(encoding="utf-8")).group()
     session = driver("/session",{"capabilities":{"alwaysMatch":{"browserName":"MiniBrowser"}}})["sessionId"]
     prefix = "/session/"+session
     def js(script,args=None):
@@ -88,7 +88,7 @@ try:
             elif kind=="raid":
                 activity["difficulty"]=difficulty
             path.with_suffix(".json").write_text(json.dumps({"schema_version":1,"activity":activity,
-                "plan":None,"media":{"duration_ms":30000}}))
+                "plan":None,"media":{"duration_ms":30000}}), encoding="utf-8")
             db.execute("INSERT INTO activities(id,data,status,path,audio_tracks,protected,tags,origin_ms) VALUES(?,?,'ready',?,2,?,?,?)",
                 (identifier,json.dumps(activity),str(path),int(i==0),json.dumps(tags),at))
     for _ in range(50):

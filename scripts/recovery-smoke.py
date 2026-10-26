@@ -49,7 +49,7 @@ try:
         "if part:\n with (root/'worker-paths').open('a') as log: log.write(part+'\\n')\n" +
         "held=False\nif part:\n try:\n  (root/'hold-once').unlink()\n  held=True\n except FileNotFoundError:\n  pass\n" +
         "if held:\n (root/'worker-started').write_text(str(os.getpid()))\n while not (root/'release-worker').exists(): time.sleep(0.05)\n" +
-        "os.execvp('ffmpeg',['ffmpeg',*sys.argv[1:]])\n")
+        "os.execvp('ffmpeg',['ffmpeg',*sys.argv[1:]])\n", encoding="utf-8")
     wrapper.chmod(0o700)
     (root / "hold-once").touch()
     identity = str(uuid.uuid4())
@@ -82,7 +82,7 @@ try:
         assert status != "failed", error
         return status == "ready"
     wait_for(ready)
-    attempts = [path for path in (root/'worker-paths').read_text().splitlines() if path.endswith('part-0000.mkv')]
+    attempts = [path for path in (root/'worker-paths').read_text(encoding="utf-8").splitlines() if path.endswith('part-0000.mkv')]
     assert len(attempts) == 2 and attempts[0] != attempts[1], "retry reused orphan worker output path"
     destination = root / "videos" / f"{identity}.mkv"
     before = destination.read_bytes()

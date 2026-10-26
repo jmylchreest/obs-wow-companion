@@ -8,7 +8,7 @@ import sys
 root = Path(__file__).resolve().parent.parent
 errors = []
 for source in [root / "README.md", *(root / "docs").rglob("*.md"), *(root / "templates").rglob("*.md")]:
-    for target in re.findall(r"\]\(([^)]+)\)", source.read_text()):
+    for target in re.findall(r"\]\(([^)]+)\)", source.read_text(encoding="utf-8")):
         target = target.split("#")[0]
         if not target or re.match(r"[a-z]+://", target):
             continue
@@ -17,7 +17,7 @@ for source in [root / "README.md", *(root / "docs").rglob("*.md"), *(root / "tem
 for source in (root / "templates/obs").rglob("*"):
     if not source.is_file() or source.suffix not in (".ini", ".json"):
         continue
-    text = source.read_text()
+    text = source.read_text(encoding="utf-8")
     if source.suffix == ".json":
         json.loads(text)
     if re.search(r"/home/|/tmp/|[A-Z]:\\\\Users\\\\|server_password|device_id", text):

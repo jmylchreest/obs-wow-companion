@@ -8,7 +8,7 @@ root=Path(tempfile.mkdtemp(prefix="owc-obs-"))
 for d in ["config","cache","data","videos"]: (root/d).mkdir()
 base=root/"config/obs-studio"
 base.mkdir(parents=True)
-(base/"user.ini").write_text("[General]\nFirstRun=true\n[Basic]\nConfigOnNewProfile=false\nProfile=Untitled\nProfileDir=Untitled\nSceneCollection=OWC Starter\nSceneCollectionFile=Untitled.json\n")
+(base/"user.ini").write_text("[General]\nFirstRun=true\n[Basic]\nConfigOnNewProfile=false\nProfile=Untitled\nProfileDir=Untitled\nSceneCollection=OWC Starter\nSceneCollectionFile=Untitled.json\n", encoding="utf-8")
 profile=base/"basic/profiles/Untitled"
 profile.mkdir(parents=True)
 starter=Path("templates/obs/OWC-Starter")
@@ -22,7 +22,7 @@ scenes=base/"basic/scenes";scenes.mkdir(parents=True)
 shutil.copyfile("templates/obs/OWC-Starter-scenes.json",scenes/"Untitled.json")
 config=base/"plugin_config/obs-websocket"
 config.mkdir(parents=True)
-(config/"config.json").write_text(json.dumps(dict(server_enabled=True,server_port=4457,server_password="owc-isolated-test",auth_required=True,first_load=False,alerts_enabled=False)))
+(config/"config.json").write_text(json.dumps(dict(server_enabled=True,server_port=4457,server_password="owc-isolated-test",auth_required=True,first_load=False,alerts_enabled=False)), encoding="utf-8")
 subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","lavfi","-i","testsrc2=size=640x360:rate=30","-f","lavfi","-i","sine=frequency=440:sample_rate=48000","-t","12","-c:v","libx264","-g","30","-c:a","aac",str(root/"videos/pattern.mp4")],check=True)
 env=os.environ.copy();env.update(TZ="UTC",DISPLAY=":121",QT_QPA_PLATFORM="xcb",XDG_CONFIG_HOME=str(root/"config"),XDG_CACHE_HOME=str(root/"cache"),XDG_DATA_HOME=str(root/"data"),LIBGL_ALWAYS_SOFTWARE="1",PULSE_SERVER="unix:/tmp/owc-no-audio-server")
 xlog=open(root/"xvfb.log","w");olog=open(root/"obs.log","w")
@@ -38,10 +38,10 @@ try:
   out=subprocess.run(["target/debug/examples/obs_probe",str(root/"videos")],capture_output=True,text=True,timeout=240,env=env)
  except subprocess.TimeoutExpired as error:
   def decode(value):return value.decode(errors="replace") if isinstance(value,bytes) else (value or "")
-  (root/"probe.log").write_text(decode(error.stdout)+decode(error.stderr)+"\nProbe exceeded 240 seconds.\n")
+  (root/"probe.log").write_text(decode(error.stdout)+decode(error.stderr)+"\nProbe exceeded 240 seconds.\n", encoding="utf-8")
   print("Timed out; evidence:",root)
   raise
- (root/"probe.log").write_text(out.stdout+out.stderr)
+ (root/"probe.log").write_text(out.stdout+out.stderr, encoding="utf-8")
  subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1280x720","-i",":121","-frames:v","1",str(root/"after.png")],check=True)
  print("Evidence:",root);print(out.stdout[-9000:]);print(out.stderr[-1000:])
  if out.returncode: raise SystemExit(out.returncode)

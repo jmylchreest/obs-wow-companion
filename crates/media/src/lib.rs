@@ -482,6 +482,9 @@ impl Media {
                     cmd.args(["-c", "copy", "-avoid_negative_ts", "make_zero"]);
                 }
                 CutMode::Precise => {
+                    // Retain the demuxer's timestamp precision. Frame-rate time bases
+                    // can round an initial A/V offset up and drop the last cut frame.
+                    cmd.args(["-enc_time_base:v", "demux"]);
                     self.encoder.configure(&mut cmd);
                     cmd.args(["-c:a", "pcm_s16le"]);
                 }
@@ -1074,12 +1077,65 @@ mod tests {
         assert!(export.fallback.is_some());
         assert_eq!(output.audio_tracks, 2);
     }
+    async fn continuity_fixture(media: &Media, dest: &Path) {
+        // PCM avoids repeating source AAC priming silence. Keep a non-frame-aligned
+        // video offset to exercise FFmpeg 6's encoder timestamp rounding.
+        checked(
+            Command::new(&media.ffmpeg)
+                .args([
+                    "-nostdin",
+                    "-v",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=size=320x180:rate=30",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:sample_rate=48000",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=880:sample_rate=48000",
+                    "-t",
+                    "3",
+                    "-map",
+                    "0:v",
+                    "-map",
+                    "1:a",
+                    "-map",
+                    "2:a",
+                    "-c:v",
+                    "libx264",
+                    "-bf",
+                    "0",
+                    "-g",
+                    "30",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-vf",
+                    "settb=1/1000,setpts=PTS+21",
+                    "-enc_time_base:v",
+                    "1/1000",
+                    "-fps_mode",
+                    "passthrough",
+                    "-c:a",
+                    "pcm_s16le",
+                ])
+                .arg(dest),
+        )
+        .await
+        .expect("continuous source fixture");
+    }
+
     #[tokio::test]
     async fn precise_many_segments_do_not_accumulate_encoder_delay() {
         let dir = tempfile::tempdir().expect("temp");
         let media = Media::default();
         let src = dir.path().join("source.mkv");
-        media.test_fixture(&src).await.expect("fixture");
+        continuity_fixture(&media, &src).await;
         let mut activity = Activity::new(Kind::Manual, "many splits".into(), 0, "manual");
         activity.finish(20_000, Outcome::Unknown);
         let segments: Vec<_> = (0..20)

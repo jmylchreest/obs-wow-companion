@@ -35,7 +35,7 @@ try:
     matches = list((root / "bin").rglob(executable))
     assert len(matches) == 1, "Expected exactly one installed binary"
     binary = matches[0]
-    expected = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+    expected = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))["workspace"]["package"]["version"]
     reported = subprocess.check_output([str(binary), "--version"], text=True, timeout=20).strip()
     assert reported.split()[-1] == expected
     env["OWC_BINARY"] = str(binary)

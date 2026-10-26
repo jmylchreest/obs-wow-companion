@@ -101,12 +101,12 @@ with (root / "xvfb.log").open("w") as xlog, (root / "app.log").open("w") as log:
         url = None
         for _ in range(150):
             time.sleep(0.2)
-            match = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+", (root / "app.log").read_text())
+            match = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+", (root / "app.log").read_text(encoding="utf-8"))
             if match:
                 url = match.group()
                 break
             if app.poll() is not None:
-                raise RuntimeError((root / "app.log").read_text())
+                raise RuntimeError((root / "app.log").read_text(encoding="utf-8"))
         assert url, "Service URL missing"
         base = url.split("/session/")[0]
         try:
@@ -136,8 +136,8 @@ with (root / "xvfb.log").open("w") as xlog, (root / "app.log").open("w") as log:
         time.sleep(4)
         if os.name != "nt":
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "x11grab", "-video_size", "1440x1000", "-i", display, "-frames:v", "1", str(root / "desktop.png")], check=True)
-        assert app.poll() is None, (root / "app.log").read_text()
-        assert "Gtk-WARNING" not in (root / "app.log").read_text(), (root / "app.log").read_text()
+        assert app.poll() is None, (root / "app.log").read_text(encoding="utf-8")
+        assert "Gtk-WARNING" not in (root / "app.log").read_text(encoding="utf-8"), (root / "app.log").read_text(encoding="utf-8")
         if os.name == "nt":
             close_windows_window(app.pid)
         else:

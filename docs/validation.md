@@ -637,3 +637,27 @@ The probe preserves captured output on timeout; its bound is now four minutes to
 accommodate the expanded real-time scenarios and slower hosted encoding. The
 already-running remote workflow predates these collection changes. Python syntax
 validation and all seven CI policy tests pass.
+
+
+### 2026-10-26: Ubuntu precise-export and Windows UTF-8 findings
+
+Run 40374920263 exposed a real precise-export issue on Ubuntu FFmpeg 6.1.1:
+20 one-second fragments produced 580 rather than 600 frames. Reproduced it in
+a private Ubuntu 24.04 Podman container. Preserving the demuxer time base with
+`-enc_time_base:v demux` avoids rounding the initial A/V offset to a frame boundary
+and dropping each fragment's last frame. The numeric legacy `-1` form is not
+accepted by the newer host FFmpeg, so the named option is used on both versions.
+
+The continuity fixture now uses PCM source audio and a precise 21 ms video offset.
+This avoids repeating AAC priming silence from the fixture itself; it still checks
+600 frames, regular 30 fps spacing, both audio tracks and every 10 ms interior
+audio window. All seven enabled media tests pass on Ubuntu FFmpeg 6.1.1 and host
+FFmpeg 9.0.2. Full local nextest: 90 passed, 7 opt-in skipped. Strict Rust 1.95
+Clippy passes. The container is `owc-ffmpeg6-validation`, for follow-up checks.
+
+Windows passed its corrected workspace tests and native credential-store round
+trip, then failed decoding Markdown with Python's default CP1252 encoding.
+Validation scripts now explicitly use UTF-8 for Path text I/O. Documentation,
+license-notice regeneration and all seven CI policy tests pass locally. Native
+Windows rerun remains required. No package publication was allowed by the failed
+quality run.

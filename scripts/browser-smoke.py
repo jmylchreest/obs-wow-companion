@@ -50,7 +50,7 @@ try:
     launch([os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion"), "--no-open", "--data-dir", str(root / "data")], "app.log")
     launch(["WebKitWebDriver", "--port=4458", "--host=127.0.0.1"], "driver.log")
     time.sleep(1)
-    text = (root / "app.log").read_text()
+    text = (root / "app.log").read_text(encoding="utf-8")
     url = re.search(r"http://127\.0\.0\.1:\d+/session/[a-f0-9-]+", text).group()
     session = driver("/session", {"capabilities":{"alwaysMatch":{"browserName":"MiniBrowser"}}})["sessionId"]
     prefix = "/session/" + session
@@ -257,7 +257,7 @@ try:
     clip_path = root / "data/videos" / (clip_id + ".mkv")
     create_fixture(clip_path)
     activity = {"id":clip_id,"installation":"UI test","kind":"manual","name":"Playback test","start_ms":0,"end_ms":2000,"outcome":"success","markers":[{"at_ms":50,"kind":"combat_activity","label":"Combat activity (estimated)"},{"at_ms":500,"kind":"death","label":"Test Player"},{"at_ms":200,"kind":"boss_start","label":"Test boss"},{"at_ms":1500,"kind":"boss_end","label":"Test boss: kill"}],"warnings":[]}
-    clip_path.with_suffix(".json").write_text(json.dumps({"schema_version":1,"activity":activity,"plan":None,"media":{"duration_ms":2000}}))
+    clip_path.with_suffix(".json").write_text(json.dumps({"schema_version":1,"activity":activity,"plan":None,"media":{"duration_ms":2000}}), encoding="utf-8")
     with sqlite3.connect(root / "data/library.sqlite") as database:
         database.execute("INSERT INTO activities(id,data,status,path,audio_tracks,protected) VALUES(?,?,'ready',?,2,1)", (clip_id,json.dumps(activity),str(clip_path)))
     for _ in range(40):
@@ -436,7 +436,7 @@ try:
     assert js("return document.querySelectorAll('.event-tick.manual').length") == 1
     assert js("return document.querySelectorAll('#combat-track .boss').length") == 1
     assert js("return document.querySelectorAll('#combat-track .trash').length") == 1
-    sidecar=json.loads(clip_path.with_suffix('.json').read_text())
+    sidecar=json.loads(clip_path.with_suffix('.json').read_text(encoding="utf-8"))
     assert any(m['kind']=='manual' and m['label']=='Review this' and abs(m['at_ms']-600)<150 for m in sidecar['activity']['markers'])
     assert js("""
       const track=seekTrack.getBoundingClientRect(),duration=document.getElementById('player').duration;
@@ -584,7 +584,7 @@ try:
         + f"started=pathlib.Path({str(started)!r})\n"
         + "if any(arg.endswith(('part-0000.mkv','.partial.mp4')) for arg in sys.argv[1:]):\n"
         + " started.write_text(str(os.getpid()))\n while True: time.sleep(0.1)\n"
-        + "os.execvp('ffmpeg',['ffmpeg',*sys.argv[1:]])\n")
+        + "os.execvp('ffmpeg',['ffmpeg',*sys.argv[1:]])\n", encoding="utf-8")
     wrapper.chmod(0o700)
     js("window.originalMedia=structuredClone(state.config.media);window.cancelConfigSaved=false;const config=structuredClone(state.config);config.media.ffmpeg=arguments[0];action('save_config',{config}).then(()=>window.cancelConfigSaved=true)",[str(wrapper)])
     for _ in range(50):
@@ -596,7 +596,7 @@ try:
         time.sleep(0.1)
         if started.exists() and js("return state.share_running&&!document.getElementById('cancel-share').hidden"): break
     assert started.exists(), 'held worker never started'
-    worker_pid = int(started.read_text())
+    worker_pid = int(started.read_text(encoding="utf-8"))
     assert Path(f'/proc/{worker_pid}').exists(), 'worker must be alive before cancellation'
     click('#cancel-share')
     for _ in range(100):
@@ -646,7 +646,7 @@ try:
     (root/'asset-details.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
     # Exercise the durable automatic preparation path with a held encoder.
     started.unlink()
-    wrapper.write_text(wrapper.read_text().replace("('part-0000.mkv','.partial.mp4')", "('part-0000.mkv',)"))
+    wrapper.write_text(wrapper.read_text(encoding="utf-8").replace("('part-0000.mkv','.partial.mp4')", "('part-0000.mkv',)"), encoding="utf-8")
     js("window.originalRecording=selected;window.cancelConfigSaved=false;const config=structuredClone(state.config);config.media.ffmpeg=arguments[0];action('save_config',{config}).then(()=>window.cancelConfigSaved=true)",[str(wrapper)])
     for _ in range(50):
         time.sleep(0.1)
@@ -657,7 +657,7 @@ try:
         time.sleep(0.1)
         if started.exists() and js("return state.activities.some(a=>a.name==='Playback test: clip'&&a.status==='exporting')"): break
     assert started.exists(), 'automatic worker never started'
-    worker_pid = int(started.read_text())
+    worker_pid = int(started.read_text(encoding="utf-8"))
     js("choose(state.activities.find(a=>a.name==='Playback test: clip'))")
     for _ in range(50):
         time.sleep(0.1)
@@ -767,7 +767,7 @@ try:
         time.sleep(0.1)
         if started.exists() and js("return state.export_running"): break
     assert started.exists(), 'quit fixture encoder did not start'
-    worker_pid = int(started.read_text())
+    worker_pid = int(started.read_text(encoding="utf-8"))
     pending_id = js("return state.activities.find(a=>a.name==='Playback test: clip'&&a.status==='exporting').id")
     click('#quit')
     assert processes[1].wait(timeout=15) == 0, "Quit button must stop the service with its UI stream connected"
@@ -796,7 +796,7 @@ finally:
     held = root / 'held-ffmpeg.pid'
     if held.exists():
         try:
-            pid = int(held.read_text())
+            pid = int(held.read_text(encoding="utf-8"))
             if str(root/'held-ffmpeg.py').encode() in Path(f'/proc/{pid}/cmdline').read_bytes():
                 import signal
                 os.kill(pid, signal.SIGKILL)
