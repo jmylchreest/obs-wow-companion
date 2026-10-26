@@ -20,7 +20,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/build-environment
-      - run: cargo install cargo-dist --version 0.32.0 --locked
+      - uses: ./.github/actions/cargo-tool
+        with:
+          package: cargo-dist
+          executable: dist
+          version: "0.32.0"
       - name: Build archive
         env:
           DIST_TARGET: ${{ matrix.target }}
@@ -82,7 +86,11 @@ jobs:
           merge-multiple: true
           path: target/distrib
       - run: rustup toolchain install 1.95 --profile minimal && rustup default 1.95
-      - run: cargo install cargo-dist --version 0.32.0 --locked
+      - uses: ./.github/actions/cargo-tool
+        with:
+          package: cargo-dist
+          executable: dist
+          version: "0.32.0"
       - run: dist build --artifacts=global
       - name: Verify full release bundle
         run: python3 scripts/ci-tools.py bundle target/distrib

@@ -27,6 +27,8 @@
 
 ### Added
 
+- Exact-version CI caches for Cargo validation and packaging tools, separated by OS, architecture and Rust compiler.
+
 - Native OBS validation of delayed encounters with missing leading footage, including truncated metadata and a playable partial clip.
 
 - Native combat-log file notifications with bounded wakeups and periodic reconciliation when notifications are missed or unavailable.

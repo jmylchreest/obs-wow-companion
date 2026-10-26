@@ -1,0 +1,35 @@
+name: Cached Cargo tool
+description: Install an exact Cargo tool version, cached per platform and compiler
+inputs:
+  package:
+    description: Registry package name
+    required: true
+  executable:
+    description: Installed executable name
+    required: true
+  version:
+    description: Exact registry package version
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: compiler
+      shell: bash
+      run: printf 'rust=%s\n' "$(rustc --version)" >> "$GITHUB_OUTPUT"
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: |
+          ~/.cargo/bin/${{ inputs.executable }}
+          ~/.cargo/bin/${{ inputs.executable }}.exe
+        key: cargo-tool-${{ runner.os }}-${{ runner.arch }}-${{ inputs.package }}-${{ inputs.version }}-${{ steps.compiler.outputs.rust }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        TOOL_PACKAGE: ${{ inputs.package }}
+        TOOL_VERSION: ${{ inputs.version }}
+      run: cargo install "$TOOL_PACKAGE" --version "$TOOL_VERSION" --locked
+    - shell: bash
+      env:
+        TOOL_EXECUTABLE: ${{ inputs.executable }}
+      run: '"$TOOL_EXECUTABLE" --version'

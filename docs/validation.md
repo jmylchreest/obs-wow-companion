@@ -610,3 +610,14 @@ The pending implementation and Windows fixture fixes were pushed to the temporar
 `ci/release-validation` branch and dispatched as run 40374920263. This allows the
 older main-branch Linux job to finish without cancellation. Neither run is yet
 a passing full release-validation result.
+
+
+### 2026-10-26: Reusable CI tool cache
+
+Added a composite action for exact-version Cargo tool installation. Cache keys
+include package version, runner OS/architecture and the full `rustc --version`
+output, with no broad restore fallback. Only the named executable is cached;
+lockfiles, dependencies and required validation commands are unchanged. This is
+used for nextest, cargo-deny, cargo-dist and release-plz. Workflow lint and all
+seven publication-policy tests pass. Remote cache restore/save behavior still
+needs its first workflow run; run 40374920263 predates this change.

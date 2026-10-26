@@ -24,7 +24,11 @@ jobs:
           sudo apt-get install -y obs-studio
           mkdir -p target/ci-evidence
           obs --version > target/ci-evidence/obs-version.txt
-      - run: cargo install cargo-nextest --version 0.9.149 --locked
+      - uses: ./.github/actions/cargo-tool
+        with:
+          package: cargo-nextest
+          executable: cargo-nextest
+          version: "0.9.149"
       - run: cargo build --example obs_probe --bin obs-wow-companion --locked
       - name: Private OBS recording, splitting and encounter exports
         env:
