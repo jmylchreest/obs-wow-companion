@@ -4,6 +4,9 @@
 
 ### Added
 
+- Add opt-in timing traces and repeatable library benchmarks for investigating slow paths.
+- Audit maintenance tool pins weekly and include macOS dependencies in advisory and licence checks.
+
 - Add platform-specific website installation instructions with OBS, FFmpeg, WebView2 and macOS source-build links.
 
 - Add macOS to source CI and exercise FFmpeg/ffprobe lookup, explicit Unicode paths, missing tools and real media operations on Linux, Windows and macOS.
@@ -13,9 +16,14 @@
 
 ### Changed
 
+- Refresh Rust dependencies, desktop webview libraries and pinned CI tools. Keep saved OBS credentials in the native system store.
+- Reuse the prepared database statement when saving a batch of recordings.
+
 - Serve six focused player guides as HTML on the website and in future release archives. Consolidate contributor documentation, archive old development journals and correct outdated setup and validation instructions.
 
 ### Fixed
+
+- Wait for a cancelled FFmpeg process to stop before reporting cancellation or removing its temporary files.
 
 - Make the fake OBS recovery timer advance with elapsed time so slower CI runners exercise the same ownership checks reliably.
 

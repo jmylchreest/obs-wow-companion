@@ -270,6 +270,10 @@ impl Engine {
         }
         Ok(())
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile")
+    )]
     pub(crate) fn snapshot(&self) -> Result<Value> {
         let segments = self.db.segments()?;
         let mut activities = self.db.list()?;
@@ -969,6 +973,10 @@ impl Engine {
             );
         }
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile")
+    )]
     async fn log_batch(&mut self, batch: LogBatch) -> Result<()> {
         if batch.generation != self.log_generation {
             return Ok(());
@@ -1379,6 +1387,10 @@ impl Engine {
             .await?)
     }
     #[allow(clippy::too_many_lines)] // Serialized command boundary; mutation guards are kept with actions.
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile")
+    )]
     async fn command(&mut self, v: Value) -> Result<Value> {
         let action = v["action"].as_str().unwrap_or_default();
         if self.shutting_down && !action.starts_with('_') && action != "shutdown" {
@@ -2300,6 +2312,10 @@ impl Engine {
         Ok(())
     }
     #[allow(clippy::too_many_lines)]
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile")
+    )]
     async fn tick(&mut self) -> Result<()> {
         if self.shutting_down {
             return self.retry_log_checkpoint();

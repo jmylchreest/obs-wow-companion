@@ -17,3 +17,14 @@ jobs:
   packages:
     needs: quality
     uses: ./.github/workflows/packages.yml
+  complete:
+    name: CI complete
+    if: always()
+    needs: [quality, packages]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every verification job
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          PACKAGES: ${{ needs.packages.result }}
+        run: test "$QUALITY" = success && test "$PACKAGES" = success

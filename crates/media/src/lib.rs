@@ -162,24 +162,28 @@ fn direct_copy_compatible(plan: &ClipPlan, inputs: &[Probe]) -> Result<bool> {
                     == range.segment.end_ms - range.segment.start_ms)
     }))
 }
-async fn run_ffmpeg_progress(
+async fn run_cancellable_ffmpeg(
     command: &mut Command,
     progress: Option<tokio::sync::watch::Sender<Progress>>,
+    mut cancel: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> Result<()> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    let Some(progress) = progress else {
-        checked(command).await?;
-        return Ok(());
-    };
-    let stage = progress.borrow().clone();
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+    anyhow::ensure!(
+        !cancel.as_ref().is_some_and(|c| *c.borrow()),
+        "Export cancelled. Retry when ready."
+    );
+    let stage = progress.as_ref().map(|p| p.borrow().clone());
+    if progress.is_some() {
+        command.args(["-progress", "pipe:1", "-nostats", "-stats_period", "1"]);
+    }
     command
-        .args(["-progress", "pipe:1", "-nostats", "-stats_period", "1"])
         .kill_on_drop(true)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().context("start FFmpeg")?;
     let stdout = child.stdout.take().context("FFmpeg progress pipe")?;
+    let mut stderr = child.stderr.take().context("FFmpeg error pipe")?;
     let read_progress = async {
         let mut lines = BufReader::new(stdout).lines();
         let mut processed = 0_i64;
@@ -191,7 +195,9 @@ async fn run_ffmpeg_progress(
             if let Some(value) = line.strip_prefix("speed=") {
                 speed = value.chars().take(24).collect();
             }
-            if line.starts_with("progress=") {
+            if line.starts_with("progress=")
+                && let (Some(progress), Some(stage)) = (&progress, &stage)
+            {
                 let mut update = stage.clone();
                 update.processed_seconds = Some(processed);
                 update.speed = speed
@@ -205,37 +211,40 @@ async fn run_ffmpeg_progress(
         }
         Ok::<_, std::io::Error>(())
     };
-    let ((), output) = timeout(Duration::from_hours(1), async {
-        tokio::try_join!(read_progress, child.wait_with_output())
-    })
-    .await
-    .context("media process exceeded one-hour limit")??;
-    if !output.status.success() {
+    let mut errors = Vec::new();
+    let cancelled = async {
+        match cancel.as_mut() {
+            Some(cancel) => {
+                // Dropping the sender is not a cancellation request.
+                if cancel.wait_for(|value| *value).await.is_err() {
+                    std::future::pending::<()>().await;
+                }
+            }
+            None => std::future::pending::<()>().await,
+        }
+    };
+    let result: Result<_> = tokio::select! {
+        result = timeout(Duration::from_hours(1), async {
+            tokio::try_join!(read_progress, stderr.read_to_end(&mut errors), child.wait())
+        }) => result.context("media process exceeded one-hour limit").and_then(|r| r.map_err(Into::into)),
+        () = cancelled => Err(anyhow::anyhow!("Export cancelled. Retry when ready.")),
+    };
+    // kill_on_drop only requests termination. Reap before reporting completion
+    // or deleting staging files, including on Windows where open files stay locked.
+    if result.is_err() {
+        child.kill().await.context("stop and reap FFmpeg")?;
+    }
+    let ((), _, status) = result?;
+    if !status.success() {
         bail!(
             "media process failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            String::from_utf8_lossy(&errors)
                 .chars()
                 .take(4096)
                 .collect::<String>()
         );
     }
     Ok(())
-}
-
-async fn run_cancellable_ffmpeg(
-    command: &mut Command,
-    progress: Option<tokio::sync::watch::Sender<Progress>>,
-    cancel: Option<tokio::sync::watch::Receiver<bool>>,
-) -> Result<()> {
-    if let Some(mut cancel) = cancel {
-        anyhow::ensure!(!*cancel.borrow(), "Export cancelled. Retry when ready.");
-        tokio::select! {
-            result = run_ffmpeg_progress(command, progress) => result,
-            _ = cancel.wait_for(|cancelled| *cancelled) => bail!("Export cancelled. Retry when ready."),
-        }
-    } else {
-        run_ffmpeg_progress(command, progress).await
-    }
 }
 
 impl Media {
@@ -316,6 +325,10 @@ impl Media {
         plan.actual_start_ms = Some(first.segment.start_ms + keyframe);
         Ok(())
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile", name = "media.probe")
+    )]
     pub async fn probe(&self, path: &Path) -> Result<Probe> {
         let data = checked(
             Command::new(&self.ffprobe)
@@ -405,6 +418,10 @@ impl Media {
             height: video["height"].as_u64().unwrap_or(0),
         })
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile", name = "media.export")
+    )]
     pub async fn export(&self, plan: &ClipPlan, dest: &Path, mode: CutMode) -> Result<Probe> {
         self.report(MediaStage::Reading);
         if matches!(plan.coverage, Coverage::Unavailable | Coverage::Gapped)
@@ -756,6 +773,10 @@ impl Media {
         Ok(probe)
     }
     /// Decodes every video frame and audio stream before publishing a finished asset.
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile", name = "media.verify_decodable")
+    )]
     pub async fn verify_decodable(&self, path: &Path) -> Result<()> {
         self.report(MediaStage::Checking);
         self.run_ffmpeg(
@@ -1454,6 +1475,46 @@ mod tests {
         assert!(media.thumbnail(&source, -1).await.is_err());
         assert!(media.thumbnail(&source, info.duration_ms).await.is_err());
         assert_eq!(std::fs::read(&source).expect("source"), before);
+    }
+
+    #[tokio::test]
+    async fn cancellation_stops_an_active_encoder() {
+        let media = Media::default();
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        let (progress, mut observed) =
+            tokio::sync::watch::channel(Progress::new(MediaStage::Encoding));
+        let worker = tokio::spawn(async move {
+            run_cancellable_ffmpeg(
+                Command::new(&media.ffmpeg).args([
+                    "-v",
+                    "error",
+                    "-re",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=size=64x64:rate=10",
+                    "-t",
+                    "600",
+                    "-f",
+                    "null",
+                    "-",
+                ]),
+                Some(progress),
+                Some(cancelled),
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(15), observed.changed())
+            .await
+            .expect("encoder starts")
+            .expect("progress available");
+        cancel.send_replace(true);
+        let error = tokio::time::timeout(Duration::from_secs(5), worker)
+            .await
+            .expect("prompt cancellation")
+            .expect("worker")
+            .expect_err("cancelled");
+        assert!(error.to_string().contains("cancelled"), "{error:#}");
     }
 
     #[tokio::test]
