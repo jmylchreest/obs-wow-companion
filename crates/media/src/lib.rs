@@ -162,6 +162,39 @@ fn direct_copy_compatible(plan: &ClipPlan, inputs: &[Probe]) -> Result<bool> {
                     == range.segment.end_ms - range.segment.start_ms)
     }))
 }
+async fn stop_media_process(child: &mut tokio::process::Child) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    if let Some(pid) = child.id() {
+        // PATH may resolve to a Chocolatey launcher. Killing only that launcher
+        // leaves FFmpeg running and its inherited pipes open on Windows.
+        let system = std::env::var_os("SystemRoot").context("locate Windows system directory")?;
+        let result = timeout(
+            Duration::from_secs(10),
+            Command::new(PathBuf::from(system).join("System32/taskkill.exe"))
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .status(),
+        )
+        .await;
+        match result {
+            Ok(Ok(status)) if status.success() => {
+                child.wait().await.context("reap stopped media launcher")?;
+                return Ok(());
+            }
+            _ if child.try_wait()?.is_some() => return Ok(()),
+            _ => {
+                child.kill().await.context("stop media launcher")?;
+                bail!("Could not stop the complete media process tree");
+            }
+        }
+    }
+    child.kill().await.context("stop and reap FFmpeg")?;
+    Ok(())
+}
+
 async fn run_cancellable_ffmpeg(
     command: &mut Command,
     progress: Option<tokio::sync::watch::Sender<Progress>>,
@@ -232,7 +265,7 @@ async fn run_cancellable_ffmpeg(
     // kill_on_drop only requests termination. Reap before reporting completion
     // or deleting staging files, including on Windows where open files stay locked.
     if result.is_err() {
-        child.kill().await.context("stop and reap FFmpeg")?;
+        stop_media_process(&mut child).await?;
     }
     let ((), _, status) = result?;
     if !status.success() {

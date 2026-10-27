@@ -25,6 +25,8 @@
 
 ### Fixed
 
+- Stop the whole Windows media process tree when cancelling an export, including FFmpeg launched through Chocolatey. Fail CI tests which leak processes or exceed their time limit.
+
 - Backport the upstream GLib string-iterator correction for the Linux desktop stack (RUSTSEC-2024-0429), and check transitive unsoundness advisories.
 
 - Wait for a cancelled FFmpeg process to stop before reporting cancellation or removing its temporary files.
