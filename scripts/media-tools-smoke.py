@@ -2,6 +2,7 @@
 """Exercise the Rust media adapter with isolated executable lookup on each OS."""
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,10 +13,17 @@ from media_fixture import create_fixture
 
 def main():
     tools = {name: Path(shutil.which(name)).resolve() for name in ("ffmpeg", "ffprobe")}
+    report = {"platform": platform.platform(), "tools": {}, "passed": []}
+    for name, executable in tools.items():
+        report["tools"][name] = subprocess.check_output([str(executable), "-version"], text=True).splitlines()[0]
     build = subprocess.run(
         ["cargo", "test", "-p", "owc-media", "--locked", "--test", "tool_paths",
-         "--no-run", "--message-format=json"], check=True, capture_output=True, text=True,
+         "--no-run", "--message-format=json"], capture_output=True, text=True,
     )
+    if build.returncode:
+        print(build.stdout)
+        print(build.stderr)
+        build.check_returncode()
     executables = [item["executable"] for line in build.stdout.splitlines()
                    if (item := json.loads(line)).get("reason") == "compiler-artifact"
                    and item.get("executable")]
@@ -50,7 +58,11 @@ def main():
                                OWC_MEDIA_FIXTURE=str(root))
             subprocess.run([executables[0], "--ignored", "--exact", "configured_tools"],
                            env=environment, cwd=root, check=True, timeout=120)
+            report["passed"].append(label)
             print(f"Passed: {label}", flush=True)
+    output = Path("target/media-tools-report.json")
+    output.parent.mkdir(exist_ok=True)
+    output.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,11 @@
 //! User-scoped startup registration, changed only by an explicit UI action.
-use anyhow::{Context, Result, bail};
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+use anyhow::Context;
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 
 fn registration() -> Result<PathBuf> {
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let base = directories_next::BaseDirs::new().context("user directories unavailable")?;
     #[cfg(target_os = "linux")]
     return Ok(base
@@ -48,6 +51,12 @@ fn desktop_argument(path: &Path) -> Result<String> {
     ))
 }
 
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+pub fn set(_enabled: bool, _data: &Path) -> Result<()> {
+    bail!("startup registration is supported on Linux and Windows")
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub fn set(enabled: bool, data: &Path) -> Result<()> {
     let path = registration()?;
     if !enabled {

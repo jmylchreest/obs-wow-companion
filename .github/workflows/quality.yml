@@ -53,6 +53,7 @@ jobs:
           path: |
             target/nextest/ci/junit.xml
             target/criterion
+            target/media-tools-report.json
           retention-days: 14
   policy:
     runs-on: ubuntu-24.04
