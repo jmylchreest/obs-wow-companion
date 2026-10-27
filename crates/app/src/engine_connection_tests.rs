@@ -573,7 +573,7 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
                     },
                     event: ActivityEvent::Abandoned {
                         activity,
-                        reason: AbandonReason::Restart,
+                        reason: AbandonReason::Inactivity,
                     },
                 }],
                 parse_errors: 0,
@@ -604,11 +604,49 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
             }
         );
         requests.lock().expect("requests").clear();
-        if let Some(batch) = abandonment {
+        if let Some(mut batch) = abandonment {
+            resumed.tick().await.expect("still in the key");
+            assert!(
+                !requests
+                    .lock()
+                    .expect("requests")
+                    .iter()
+                    .any(|request| request == "StopRecord")
+            );
+            assert_eq!(resumed.automatic_activities.len(), 1);
+            let installation_id = batch.installation_id;
+            resumed.recovering_logs.insert(installation_id);
+            batch.state.tailer.has_backlog = true;
             resumed
                 .log_batch(batch)
                 .await
-                .expect("abandon after reconnect");
+                .expect("end found during replay");
+            resumed
+                .tick()
+                .await
+                .expect("wait for remaining log backlog");
+            assert!(
+                !requests
+                    .lock()
+                    .expect("requests")
+                    .iter()
+                    .any(|request| request == "StopRecord")
+            );
+            let mut caught_up = resumed.logs[&installation_id.to_string()].clone();
+            caught_up.tailer.has_backlog = false;
+            let (committed, _) = tokio::sync::oneshot::channel();
+            resumed
+                .log_batch(LogBatch {
+                    generation: resumed.log_generation,
+                    installation_id,
+                    state: caught_up,
+                    events: vec![],
+                    parse_errors: 0,
+                    error: None,
+                    committed,
+                })
+                .await
+                .expect("caught up");
         }
         if expected {
             assert!(

@@ -143,6 +143,7 @@ pub struct Engine {
     stop_when_started: bool,
     log_generation: u64,
     log_watchers: Vec<tokio::task::JoinHandle<()>>,
+    recovering_logs: std::collections::HashSet<Uuid>,
     last_log_event: Option<LogEvent>,
 }
 impl Engine {
@@ -204,6 +205,7 @@ impl Engine {
             stop_when_started: false,
             log_generation: 0,
             log_watchers: vec![],
+            recovering_logs: std::collections::HashSet::new(),
             last_log_event: None,
             credential_scope,
             credential_status: None,
@@ -697,13 +699,16 @@ impl Engine {
         }
         tracked
     }
-    fn activity_finished(&mut self, mut activity: Activity) {
+    fn activity_finished(&mut self, activity: Activity) {
+        self.finish_activity(activity, false);
+    }
+    fn finish_activity(&mut self, mut activity: Activity, retain_previous: bool) {
         let tracked = self.retire_automatic_activity(activity.id);
         let interrupted = self.interrupted_activities.remove(&activity.id);
         // A delayed completion can arrive after capture has stopped, or while
         // OBS is unavailable. Keep its metadata so the planner can recover closed
         // footage (or report unavailable), without acquiring capture ownership.
-        let retain_metadata = self.setup_completed && !self.automatic_paused;
+        let retain_metadata = retain_previous || (self.setup_completed && !self.automatic_paused);
         if tracked || interrupted || retain_metadata || (self.armed && !self.automatic_session) {
             if interrupted || (tracked && !self.armed) {
                 activity.warnings.push(
@@ -887,6 +892,12 @@ impl Engine {
     }
 
     fn restart_log_watchers(&mut self, recover: bool) {
+        let installations = self.config.installations.iter().map(|i| i.id).collect();
+        if recover {
+            self.recovering_logs = installations;
+        } else {
+            self.recovering_logs.retain(|id| installations.contains(id));
+        }
         for watcher in self.log_watchers.drain(..) {
             watcher.abort();
         }
@@ -902,7 +913,7 @@ impl Engine {
                 state,
                 self.log_generation,
                 Duration::from_secs(u64::from(self.config.activity_timeout_minutes) * 60),
-                recover,
+                recover || self.recovering_logs.contains(&installation.id),
                 self.bus.clone(),
             ));
         }
@@ -969,6 +980,16 @@ impl Engine {
             return Ok(());
         };
         self.record_watcher_state(&installation, &batch);
+        let previous_activity = self
+            .logs
+            .get(&installation.id.to_string())
+            .and_then(|log| log.detector.active.as_ref())
+            .map(|activity| activity.id);
+        if !batch.state.tailer.has_backlog
+            && (batch.error.is_none() || batch.state.detector.active.is_none())
+        {
+            self.recovering_logs.remove(&installation.id);
+        }
         self.logs.insert(installation.id.to_string(), batch.state);
         self.log_errors += batch.parse_errors;
         if let Some(error) = batch.error {
@@ -980,11 +1001,10 @@ impl Engine {
             }
             self.record_log_event(&event, &installation.name);
             self.last_log_event = Some(event.clone());
-            let (activity, started, recovered) = match event.event {
-                ActivityEvent::Started(activity) => (activity, true, false),
-                ActivityEvent::Finished(activity) => (activity, false, false),
-                ActivityEvent::Abandoned { activity, reason } => {
-                    (activity, false, reason == AbandonReason::Restart)
+            let (activity, started) = match event.event {
+                ActivityEvent::Started(activity) => (activity, true),
+                ActivityEvent::Finished(activity) | ActivityEvent::Abandoned { activity, .. } => {
+                    (activity, false)
                 }
                 ActivityEvent::Marker(marker) => {
                     if let Some(manual) = self
@@ -1001,15 +1021,10 @@ impl Engine {
                 }
                 ActivityEvent::Updated(_) | ActivityEvent::Diagnostic(_) => continue,
             };
-            if recovered {
-                // OBS ownership may be restored before this watcher's restart batch.
-                // Retire its capture reference even when today's filters exclude it.
-                self.retire_automatic_activity(activity.id);
-                self.interrupted_activities.remove(&activity.id);
-                self.completed_events.push(activity);
-                continue;
-            }
-            if !installation.allows(&activity) {
+            let previous = previous_activity == Some(activity.id);
+            let tracked = self.automatic_activities.contains(&activity.id)
+                || self.interrupted_activities.contains(&activity.id);
+            if !installation.allows(&activity) && (started || (!previous && !tracked)) {
                 continue;
             }
             if started {
@@ -1017,7 +1032,7 @@ impl Engine {
                     self.message = error.to_string();
                 }
             } else {
-                self.activity_finished(activity);
+                self.finish_activity(activity, previous);
             }
         }
         self.pending_log_acks.push(batch.committed);
@@ -2307,6 +2322,7 @@ impl Engine {
                 "OBS start confirmation timed out; checking state before further control.".into();
         }
         if self.automatic_session
+            && self.recovering_logs.is_empty()
             && self.automatic_activities.is_empty()
             && self
                 .automatic_stop

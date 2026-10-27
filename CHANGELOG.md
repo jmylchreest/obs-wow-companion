@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- Resume an active key after a crash by replaying missed combat-log events. Finish completed or abandoned keys correctly, and wait for startup log replay before stopping verified Companion-owned OBS capture.
+
 - Stop a verified Companion-owned OBS recording after restart when its interrupted key is abandoned, whichever startup event arrives first.
 
 - Version public image and video URLs after captures so returning visitors receive the updated footage.

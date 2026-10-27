@@ -55,7 +55,6 @@ pub enum AbandonReason {
     Replaced,
     Inactivity,
     DungeonExit,
-    Restart,
     User,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -281,9 +280,9 @@ fn poll(
 ) -> (Vec<LogEvent>, u64, Option<String>) {
     let mut events = vec![];
     let mut errors = 0;
-    let lines = match state.tailer.poll_sources(&installation.logs) {
-        Ok(lines) => lines,
-        Err(error) => return (events, errors, Some(error.to_string())),
+    let (lines, error) = match state.tailer.poll_sources(&installation.logs) {
+        Ok(lines) => (lines, None),
+        Err(error) => (vec![], Some(error.to_string())),
     };
     for line in lines {
         let Ok(parsed) = owc_wow_log::parse(&line.text, now) else {
@@ -303,7 +302,7 @@ fn poll(
             event: completed(activity, AbandonReason::Inactivity),
         });
     }
-    (events, errors, None)
+    (events, errors, error)
 }
 fn watch_changes(
     path: &std::path::Path,
@@ -348,26 +347,9 @@ pub fn spawn(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let (_watcher, mut changes) = watch_changes(&installation.logs);
-        let mut recovery = vec![];
-        if recover && let Some(mut activity) = state.detector.active.take() {
-            activity.finish(
-                state
-                    .detector
-                    .last_event_ms
-                    .unwrap_or(activity.start_ms)
-                    .max(activity.start_ms + 1),
-                Outcome::Abandoned,
-            );
-            stamp(&mut activity, &installation);
-            activity.warnings.push("Companion restarted during this activity; only confirmed footage can be recovered.".into());
-            recovery.push(LogEvent {
-                source: source(&installation, state.last_source.clone()),
-                event: ActivityEvent::Abandoned {
-                    activity,
-                    reason: AbandonReason::Restart,
-                },
-            });
-        }
+        // The durable detector and cursor describe one activity. Replay missed
+        // lines before inactivity/exit expiry; restarting alone is not an ending.
+        let mut first_poll = recover;
         state.detector.installation.clone_from(&installation.name);
         loop {
             let before = serde_json::to_vec(&state).ok();
@@ -383,12 +365,12 @@ pub fn spawn(
                 (state, result)
             })
             .await;
-            let Ok((next, (mut events, parse_errors, error))) = result else {
+            let Ok((next, (events, parse_errors, error))) = result else {
                 break;
             };
             state = next;
-            recovery.append(&mut events);
-            if !recovery.is_empty()
+            if first_poll
+                || !events.is_empty()
                 || parse_errors > 0
                 || error.is_some()
                 || before != serde_json::to_vec(&state).ok()
@@ -398,7 +380,7 @@ pub fn spawn(
                     generation,
                     installation_id: installation.id,
                     state: state.clone(),
-                    events: std::mem::take(&mut recovery),
+                    events,
                     parse_errors,
                     error,
                     committed,
@@ -406,6 +388,7 @@ pub fn spawn(
                 if !bus.publish(CaptureEvent::Logs(Box::new(batch))).await || ack.await.is_err() {
                     break;
                 }
+                first_poll = false;
             }
             if !state.tailer.has_backlog {
                 tokio::select! {
@@ -421,6 +404,124 @@ pub fn spawn(
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // Shared crash/replay fixture checks each terminal and continuing state.
+    async fn restart_replays_missed_events_before_deciding_whether_key_has_ended() {
+        use chrono::TimeZone;
+        for scenario in [
+            "running",
+            "still",
+            "completed",
+            "exit",
+            "quiet",
+            "backlog",
+            "missing",
+        ] {
+            let root = tempfile::tempdir().expect("root");
+            let config = installation(root.path().join("Logs"));
+            std::fs::create_dir(&config.logs).expect("logs");
+            let file = config.logs.join("WoWCombatLog-restart.txt");
+            let now = chrono::Utc::now().timestamp_millis();
+            let start = now - if scenario == "still" { 10_000 } else { 600_000 };
+            let line = |at, body: &str| {
+                format!(
+                    "{}  {body}",
+                    chrono::Local
+                        .timestamp_millis_opt(at)
+                        .single()
+                        .expect("time")
+                        .format("%m/%d/%Y %H:%M:%S%.3f")
+                )
+            };
+            let mut initial = LogState::new(&config);
+            poll(&config, &mut initial, now, 300_000);
+            append(
+                &file,
+                &line(start, "CHALLENGE_MODE_START,Restart dungeon,100,200,20,[]"),
+            );
+            poll(&config, &mut initial, start, 300_000);
+            let id = initial.detector.active.as_ref().expect("started").id;
+            let restored: LogState =
+                serde_json::from_value(serde_json::to_value(&initial).expect("checkpoint"))
+                    .expect("restart");
+            match scenario {
+                "running" => append(
+                    &file,
+                    &line(now - 1000, "UNIT_DIED,0,nil,0,0,Player-1,Player,0x511,0,0"),
+                ),
+                "completed" => append(
+                    &file,
+                    &line(now - 1000, "CHALLENGE_MODE_END,100,1,20,599000"),
+                ),
+                "exit" => append(&file, &line(now - 61_000, "ZONE_CHANGE,999,Outside,0")),
+                "backlog" => {
+                    let mut content = String::new();
+                    for index in 0..15_000 {
+                        content.push_str(&line(now - 590_000 + index * 39, "SPELL_DAMAGE,Player-1,Player,0x511,0,Creature-1,Enemy,0xa48,0,123,Spell,1,42"));
+                        content.push('\n');
+                    }
+                    append(&file, &content);
+                }
+                "missing" => std::fs::remove_dir_all(&config.logs).expect("missing logs"),
+                _ => {}
+            }
+            let (bus, mut receiver) = EventBus::new();
+            let task = spawn(config, restored, 1, Duration::from_mins(5), true, bus);
+            let mut finished = vec![];
+            let mut starts = 0;
+            let mut batches = 0;
+            loop {
+                let CaptureEvent::Logs(batch) =
+                    tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+                        .await
+                        .expect("batch timeout")
+                        .expect("batch")
+                else {
+                    panic!("logs")
+                };
+                batches += 1;
+                for event in &batch.events {
+                    match &event.event {
+                        ActivityEvent::Started(_) => starts += 1,
+                        ActivityEvent::Finished(activity)
+                        | ActivityEvent::Abandoned { activity, .. } => {
+                            finished.push(activity.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                if !batch.state.tailer.has_backlog {
+                    if matches!(scenario, "running" | "still" | "backlog") {
+                        assert_eq!(batch.state.detector.active.as_ref().expect(scenario).id, id);
+                        assert!(finished.is_empty(), "{scenario}: no invented abandonment");
+                    } else {
+                        assert!(batch.state.detector.active.is_none(), "{scenario}");
+                        assert_eq!(finished.len(), 1, "{scenario}");
+                        assert_eq!(finished[0].id, id);
+                        assert_eq!(
+                            finished[0].outcome,
+                            if scenario == "completed" {
+                                Outcome::Success
+                            } else {
+                                Outcome::Abandoned
+                            }
+                        );
+                    }
+                    assert_eq!(starts, 0, "restart must not create a second key");
+                    if scenario == "backlog" {
+                        assert!(batches > 1);
+                    }
+                    task.abort();
+                    break;
+                }
+                batch
+                    .committed
+                    .send(())
+                    .expect("checkpoint acknowledgement");
+            }
+        }
+    }
 
     #[tokio::test]
     async fn reconciliation_recovers_when_notification_folder_is_missing() {
