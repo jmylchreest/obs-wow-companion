@@ -4,6 +4,8 @@
 
 ### Added
 
+- Add platform-specific website installation instructions with OBS, FFmpeg, WebView2 and macOS source-build links.
+
 - Add macOS to source CI and exercise FFmpeg/ffprobe lookup, explicit Unicode paths, missing tools and real media operations on Linux, Windows and macOS.
 
 - Clear log beside Collapse in Events removes saved diagnostic history while new events continue to arrive.

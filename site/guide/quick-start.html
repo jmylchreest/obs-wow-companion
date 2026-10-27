@@ -3,10 +3,44 @@
 <body><a class="skip-link" href="#content">Skip to guide</a><header class="guide-header"><a class="brand" href="../index.html"><span class="brand-icon">W</span>WoW Companion</a><nav aria-label="Project"><a href="quick-start.html">Guide</a><a href="https://github.com/jmylchreest/obs-wow-companion/releases">Downloads</a><a href="https://github.com/jmylchreest/obs-wow-companion/issues/new/choose">Get help</a></nav></header>
 <div class="guide-layout"><nav class="guide-nav" aria-label="Player guide"><a href="quick-start.html" aria-current="page">Your first recording</a><a href="obs-setup.html">OBS setup</a><a href="review.html">Review recordings</a><a href="sharing.html">Share a replay</a><a href="troubleshooting.html">Troubleshooting</a><a href="compatibility.html">What has been tested</a></nav><main id="content"><p class="eyebrow">PLAYER GUIDE</p><h1>Your first recording</h1><p class="guide-intro">Set up OBS, connect Companion and record your first pull.</p>
 <p class="notice">This is a testing preview for Windows and Linux x86-64. Try a short recording before relying on it for raid night. OBS and FFmpeg are separate installs. <a href="compatibility.html">What has been tested</a>.</p>
-<h2 id="download">1. Download and unpack</h2>
-<p>Get the <a href="https://github.com/jmylchreest/obs-wow-companion/releases">latest preview</a>. Choose the Windows ZIP or Linux tar.xz archive, extract the whole folder and run <code>obs-wow-companion.exe</code> or <code>obs-wow-companion</code>. You do not need Rust. Keep the included documentation and templates with the app.</p>
-<ul><li>Install <a href="https://obsproject.com/download">OBS Studio</a> and <a href="https://ffmpeg.org/download.html">FFmpeg, including ffprobe</a>. If the media tools are not found, select their executable paths under <strong>Settings → Advanced</strong>.</li><li>Windows needs Microsoft Edge WebView2 Runtime. Linux needs GTK 3 and WebKitGTK 4.1; the package is built on Ubuntu 24.04.</li><li>Packages are unsigned. SHA-256 checksums are included with each release.</li></ul>
-<p>On Ubuntu 24.04, install the runtime dependencies:</p><pre><code>sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 ffmpeg gstreamer1.0-libav gstreamer1.0-plugins-good</code></pre>
+<h2 id="download">1. Install Companion and its tools</h2>
+<p>Choose your platform: <a href="#windows">Windows</a> · <a href="#linux">Linux</a> · <a href="#macos">macOS (experimental source build)</a>. OBS captures your game; FFmpeg and ffprobe prepare recordings and exports. Install all three before opening Companion.</p>
+<h3 id="windows">Windows</h3>
+<ol>
+<li>Download and install <a href="https://obsproject.com/download">OBS Studio for Windows</a>.</li>
+<li>Install the <a href="https://developer.microsoft.com/en-us/microsoft-edge/webview2/">Microsoft Edge WebView2 Runtime</a> if it is missing. Choose the <strong>Evergreen Bootstrapper</strong>; it installs the runtime needed by Companion’s window.</li>
+<li>Get FFmpeg from <a href="https://www.gyan.dev/ffmpeg/builds/">gyan.dev’s Windows builds</a>, one of the providers linked by <a href="https://ffmpeg.org/download.html">the FFmpeg project</a>. Choose the <strong>release essentials ZIP</strong>, extract it to a permanent folder, and keep its <code>bin</code> folder intact. It contains both <code>ffmpeg.exe</code> and <code>ffprobe.exe</code>.</li>
+<li>Download the <a href="https://github.com/jmylchreest/obs-wow-companion/releases/download/v0.1.0-dev.1/owc-app-x86_64-pc-windows-msvc.zip">Companion Windows x86-64 ZIP</a>. Use <strong>Extract all</strong>, then open <code>obs-wow-companion.exe</code> from the extracted folder. You do not need Rust.</li>
+<li>If setup cannot find the media tools, open <strong>Settings → Advanced → Media tools</strong> and enter the full paths to <code>ffmpeg.exe</code> and <code>ffprobe.exe</code>, then save preferences. There is no need to change PATH when using explicit paths.</li>
+</ol>
+<h3 id="linux">Linux</h3>
+<p>The downloadable build is for <strong>x86-64 Linux</strong>, built on Ubuntu 24.04. Start with the <a href="https://obsproject.com/kb/linux-installation">OBS project’s Linux installation instructions</a> to choose the package for your distribution.</p>
+<p>On Ubuntu 24.04, install Companion’s desktop and media dependencies:</p>
+<pre><code>sudo apt update
+sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 ffmpeg gstreamer1.0-libav gstreamer1.0-plugins-good</code></pre>
+<p>Download the <a href="https://github.com/jmylchreest/obs-wow-companion/releases/download/v0.1.0-dev.1/owc-app-x86_64-unknown-linux-gnu.tar.xz">Companion Linux x86-64 archive</a>. Extract it in your file manager, open a terminal in the extracted folder and run:</p>
+<pre><code>./obs-wow-companion</code></pre>
+<p>Other distributions need equivalent GTK 3, WebKitGTK 4.1 and GStreamer packages. See <a href="https://ffmpeg.org/download.html">FFmpeg’s Linux package links</a> for media tools. Install FFmpeg on the host even if OBS is a Flatpak: Companion needs to run <code>ffmpeg</code> and <code>ffprobe</code> itself. Older distributions may need a source build; the Ubuntu archive is not a universal Linux package.</p>
+<h3 id="macos">macOS — experimental</h3>
+<p>There is <strong>no Mac app download or installer yet</strong>. Automated macOS tests cover the service, media tools and crash recovery, but native playback and real WoW/OBS capture still need testing. If you are comfortable building from source, you can try the current code:</p>
+<ol>
+<li>Install <a href="https://obsproject.com/download">OBS Studio for macOS</a>, choosing Apple Silicon or Intel to match your Mac.</li>
+<li>Install <a href="https://brew.sh/">Homebrew</a>, following its setup instructions, then install <a href="https://formulae.brew.sh/formula/ffmpeg">FFmpeg</a> (which includes ffprobe): <code>brew install ffmpeg</code>.</li>
+<li>Install <a href="https://developer.apple.com/xcode/resources/">Apple’s Command Line Tools</a> with <code>xcode-select --install</code>, and install Rust using <a href="https://rustup.rs/">rustup</a>. Open a new Terminal window afterwards.</li>
+<li>Build and run Companion:</li>
+</ol>
+<pre><code>git clone https://github.com/jmylchreest/obs-wow-companion.git
+cd obs-wow-companion
+rustup toolchain install 1.95
+cargo +1.95 build --release --locked --bin obs-wow-companion
+./target/release/obs-wow-companion</code></pre>
+<p>This builds the current development code, which may be newer than the downloadable preview. Automatic launch at sign-in is not implemented on macOS. If the app cannot store your OBS password, enter it for the current session.</p>
+<h3 id="media-tools">Check the media tools</h3>
+<p>In PowerShell or a terminal, these commands should each print a version:</p>
+<pre><code>ffmpeg -version
+ffprobe -version</code></pre>
+<p>If you use explicit paths in Companion, run those paths instead. On macOS, <code>command -v ffmpeg</code> and <code>command -v ffprobe</code> show the paths to enter under <strong>Settings → Advanced → Media tools</strong>. Restart Companion after changing PATH so it sees the new environment.</p>
+<p>Keep the included documentation and templates with the downloaded app. Preview packages are unsigned; <a href="https://github.com/jmylchreest/obs-wow-companion/releases/tag/v0.1.0-dev.1">release notes and SHA-256 checksums</a> are available alongside the downloads.</p>
 <h2 id="connect">2. Connect OBS</h2>
 <p>In OBS, open <strong>Tools → WebSocket Server Settings</strong>, enable the server and authentication, then open Companion. Enter the port and password in setup. The usual port is <strong>4455</strong>. Save the password securely if your system password store is available.</p>
 <p>Keep your existing scenes and audio. Let setup choose the temporary recording folder while OBS is idle. In OBS, use <strong>Settings → Output → Advanced → Recording → Standard</strong> and enable <strong>Automatic File Splitting → Only split manually</strong>. H.264 video, AAC audio and MKV are a straightforward starting point. See <a href="obs-setup.html">OBS setup</a> for capture and audio routing.</p>
