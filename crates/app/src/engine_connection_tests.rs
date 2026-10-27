@@ -478,6 +478,9 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
                         let data = match kind {
                             "GetVersion" => json!({"availableRequests":[]}),
                             "GetRecordStatus" => current.lock().expect("state").clone(),
+                            "GetOutputList" => {
+                                json!({"outputs":[{"outputName":"recording","outputActive":true}]})
+                            }
                             "GetOutputSettings" => json!({"outputSettings":{"path":path}}),
                             _ => json!({}),
                         };
@@ -518,6 +521,7 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
         (100, false, false, None),
         (5100, true, false, None),
     ] {
+        std::fs::write(&checkpoint.output_path, b"active fixture").expect("original output");
         let first = engine(root.path(), port);
         first
             .db
@@ -594,6 +598,54 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
             .await
             .expect("reconnect");
         assert_eq!(resumed.guard.can_mutate(), expected);
+        if expected {
+            // OBS keeps reporting the original output path after manual splits.
+            // Cleanup must not make that identity depend on the earliest retained segment.
+            let next = root.path().join("later-fragment.mkv");
+            std::fs::write(&next, b"still writing").expect("current fragment");
+            resumed
+                .db
+                .add_segment(&Segment {
+                    id: Uuid::new_v4(),
+                    session: checkpoint.recording.session,
+                    path: root.path().join("middle-fragment.mkv"),
+                    start_ms: now - 4000,
+                    end_ms: now - 2000,
+                    closed: true,
+                    managed: true,
+                })
+                .expect("retained middle fragment");
+            std::fs::remove_file(&checkpoint.output_path).expect("original fragment cleaned up");
+            resumed.recording.as_mut().expect("recording").path = Some(next.clone());
+            resumed
+                .db
+                .set_setting("recording_checkpoint", &Value::Null)
+                .expect("split in progress");
+            resumed
+                .refresh_recording_checkpoint()
+                .await
+                .expect("confirmed later split");
+            let saved = resumed
+                .db
+                .setting("recording_checkpoint")
+                .expect("checkpoint")
+                .expect("saved");
+            assert_eq!(
+                saved["output_path"],
+                checkpoint.output_path.to_string_lossy().as_ref(),
+                "stable OBS output identity survives cleanup"
+            );
+            assert_eq!(saved["recording"]["path"], next.to_string_lossy().as_ref());
+            let mut restarted = engine(root.path(), port);
+            let status = current.lock().expect("state").clone();
+            assert!(
+                restarted
+                    .recover_recording(resumed.obs.as_ref().expect("client"), &status)
+                    .await
+                    .expect("restart after cleanup")
+            );
+            assert!(restarted.guard.can_mutate());
+        }
         let pending = json!({"id":"waiting", "status":"pending", "end_ms":now-1000});
         assert_eq!(
             resumed.processing_status(&pending, &[])["stage"],

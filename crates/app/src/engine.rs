@@ -104,6 +104,7 @@ pub struct Engine {
     scene_restore: Option<(String, String)>,
     guard: Guard,
     recording: Option<OpenRecording>,
+    recording_output: Option<(Uuid, String, PathBuf)>,
     split_supported: bool,
     last_split: Instant,
     last_poll: Instant,
@@ -229,6 +230,7 @@ impl Engine {
             setup_completed,
             guard: Guard::default(),
             recording: None,
+            recording_output: None,
             split_supported: false,
             last_split: Instant::now(),
             last_poll: Instant::now(),
@@ -696,6 +698,7 @@ impl Engine {
         if tracked && self.automatic_session && self.automatic_activities.is_empty() {
             self.automatic_stop =
                 Some(Instant::now() + Duration::from_secs(u64::from(self.config.post_seconds)));
+            self.event_log.push("Companion", "info", &format!("Encounter capture finished; stopping after {} seconds of post-roll once log replay and any manual recording finish.", self.config.post_seconds));
         }
         tracked
     }
@@ -1209,9 +1212,21 @@ impl Engine {
             else {
                 continue;
             };
-            if Some(&path) != first.as_ref() && Some(&path) != recording.path.as_ref() {
+            let known_output =
+                self.recording_output
+                    .as_ref()
+                    .is_some_and(|(session, output, original)| {
+                        *session == recording.session && output == name && original == &path
+                    });
+            if !known_output
+                && Some(&path) != first.as_ref()
+                && Some(&path) != recording.path.as_ref()
+            {
                 continue;
             }
+            // OBS reports its initial path even after splitting. Keep that verified
+            // identity independent of quota/history cleanup of the first fragment.
+            self.recording_output = Some((recording.session, name.into(), path.clone()));
             let checkpoint = RecordingCheckpoint {
                 recording,
                 port: self.config.obs_port,
@@ -1229,6 +1244,10 @@ impl Engine {
         }
         Ok(())
     }
+    fn reject_recording_checkpoint(&mut self, reason: &str) -> Result<()> {
+        self.event_log.push("OBS", "warning", reason);
+        self.db.set_setting("recording_checkpoint", &Value::Null)
+    }
     async fn recover_recording(&mut self, client: &Client, state: &Value) -> Result<bool> {
         let Some(value) = self
             .db
@@ -1243,7 +1262,7 @@ impl Engine {
             && !checkpoint.recording.invalid
             && state["outputPaused"] != true;
         if !valid {
-            self.db.set_setting("recording_checkpoint", &Value::Null)?;
+            self.reject_recording_checkpoint("Saved recording ownership is no longer valid, or OBS is paused. Existing output is left running.")?;
             return Ok(false);
         }
         let settings = client
@@ -1256,7 +1275,7 @@ impl Engine {
             s["outputSettings"]["path"].as_str().map(PathBuf::from)
                 == Some(checkpoint.output_path.clone())
         }) {
-            self.db.set_setting("recording_checkpoint", &Value::Null)?;
+            self.reject_recording_checkpoint("OBS output no longer matches the saved recording file, or its settings could not be read. Existing output is left running.")?;
             return Ok(false);
         }
         if state["outputActive"] != true {
@@ -1269,9 +1288,14 @@ impl Engine {
             return Ok(false);
         }
         if !checkpoint.continues(state, Self::now()) {
-            self.db.set_setting("recording_checkpoint", &Value::Null)?;
+            self.reject_recording_checkpoint("OBS recording counters, timing or current file could not confirm continuity. Existing output is left running.")?;
             return Ok(false);
         }
+        self.recording_output = Some((
+            checkpoint.recording.session,
+            checkpoint.output_name,
+            checkpoint.output_path,
+        ));
         self.recording = Some(checkpoint.recording);
         self.guard = Guard {
             ownership: Ownership::Managed,

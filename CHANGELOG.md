@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- Preserve verified OBS output identity after the first recording fragment is cleaned up, so later splits still save a recoverable ownership checkpoint. Log post-roll stop decisions and ownership rejection reasons.
+
 - Resume an active key after a crash by replaying missed combat-log events. Finish completed or abandoned keys correctly, and wait for startup log replay before stopping verified Companion-owned OBS capture.
 
 - Stop a verified Companion-owned OBS recording after restart when its interrupted key is abandoned, whichever startup event arrives first.
