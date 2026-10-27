@@ -1341,6 +1341,10 @@ impl Engine {
 
         let action = v["action"].as_str().context("missing action")?;
         match action {
+            "clear_events" => self
+                .event_log
+                .clear()
+                .context("Could not clear event log")?,
             "discover_installations" => {
                 let folder = v["folder"]
                     .as_str()

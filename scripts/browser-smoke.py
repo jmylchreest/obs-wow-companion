@@ -429,6 +429,12 @@ try:
     js("document.getElementById('events-divider').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}))")
     assert js("return Math.abs(document.getElementById('events-dialog').getBoundingClientRect().height-200)<1") is True
     (root / 'events-dock.png').write_bytes(base64.b64decode(driver(prefix + '/screenshot')))
+    click('#clear-events')
+    for _ in range(40):
+        time.sleep(.1)
+        if js("return document.getElementById('event-rows').textContent==='No events recorded yet'"): break
+    assert js("return document.getElementById('event-rows').textContent==='No events recorded yet'") is True
+    assert js("return !document.getElementById('events-dialog').hidden") is True
     click('#close-events')
     assert js("return document.getElementById('events-dialog').hidden&&document.getElementById('open-events').getAttribute('aria-expanded')==='false'") is True
     print('Playback mode:', js("return state.preview.direct?'original file':'compatible copy'"))

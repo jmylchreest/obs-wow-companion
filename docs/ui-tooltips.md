@@ -19,6 +19,7 @@ This lists application-authored hover text and custom popovers, plus the bundled
 | Collapse arrow | Collapse recordings / Show recordings |
 | Pane divider | Drag to resize. Arrow keys adjust width; double-click resets it. |
 | Favourite filter | Show favourites |
+| Protected filter | Show protected recordings |
 | Recording heart | Favourite / Remove favourite |
 | Recording lock | Protect recording / Unlock recording |
 | Recording trash | Delete recording (Shift-click skips confirmation), or Unlock recording before deleting |
@@ -49,7 +50,7 @@ This lists application-authored hover text and custom popovers, plus the bundled
 | Zoom reset | Reset video zoom |
 | Death row | Review 5 seconds before death, or Outside the retained footage |
 | Death count | None |
-| Recent hits | None. Removed the redundant explanatory hover text shown in the screenshot. |
+| Recent hits | None. |
 | Retry failed recording | Retry failed export |
 | Footer Delete | Delete recording (Shift-click skips confirmation), or Unlock this recording before deleting. |
 | Export controls / metadata disclosure / labels input | No application tooltip. |

@@ -60,6 +60,7 @@ function toggleEvents(open){
   sizeEventsDock();eventRowsKey='';renderDiagnostics();
 }
 $('open-events').onclick=()=>toggleEvents($('events-dialog').hidden);
+$('clear-events').onclick=run(async()=>{const button=$('clear-events');button.disabled=true;try{await action('clear_events');}finally{button.disabled=false;}});
 $('close-events').onclick=()=>{toggleEvents(false);$('open-events').focus();};
 const eventsDivider=$('events-divider');
 eventsDivider.onpointerdown=event=>{if(event.button!==0)return;event.preventDefault();eventDrag={y:event.clientY,height:$('events-dialog').getBoundingClientRect().height};eventsDivider.setPointerCapture(event.pointerId);document.body.classList.add('resizing-events');};

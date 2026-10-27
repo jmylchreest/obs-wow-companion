@@ -1,6 +1,6 @@
 # Design: OBS WoW Companion
 
-Status: first-release requirements, updated 2026-10-25. Implementation is underway; the matrix describes required scope, not verified support. See [validation](validation.md) and the [implementation plan](implementation-plan.md) for current evidence.
+Status: stable-release design contract. A testing preview is published; this matrix preserves the agreed scope, not verified support. See [validation](validation.md) and the [release audit](release-audit.md) for current evidence, and the [player guide](../site/guide/quick-start.html) for current instructions.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Build a local-first Rust desktop companion for OBS Studio on Linux and Windows. 
 
 Aim for broad parity with Warcraft Recorder's **local** recording and review workflow. Reuse users' existing OBS configuration. Do not require a modified OBS build, capture plugin, account or cloud service.
 
-The user has chosen Rust, cross-platform support, a separate OBS companion, and inclusion of all previously proposed MVP and 1.0 features in the first public release. Storage design and defaults below remain proposed implementation choices. “OBS” is the interpretation of “iobc” in the request.
+The user has chosen Rust, cross-platform support, a separate OBS companion, and inclusion of all previously proposed MVP and 1.0 features in the first public release. Historical proposals below describe the design intent; current behaviour and qualification are recorded in the guide and release audit.
 
 ## Feature comparison
 
@@ -93,7 +93,7 @@ Streaming is left untouched. Recording concurrently with a stream must be tested
 
 Closing the desktop window or choosing Quit exits the application after bounded shutdown handling. Opt-in sign-in startup is supported. Normal closing must not silently minimise to a tray.
 
-### Timing and failure behavior
+### Timing and failure behaviour
 
 - Keep raw log timestamps, UTC-normalised event times, file offsets, receive times and monotonic session timing separately.
 - Map activity time onto actual media time using OBS status observations and probed segment durations. Record mapping uncertainty. Do not equate WebSocket round-trip completion with the first encoded frame.
@@ -224,7 +224,7 @@ Implementation may proceed through internal PvE, PvP/Classic and review/packagin
 
 ### OBS documentation and starter configuration
 
-Maintain the [OBS setup guide](obs-setup.md), [native starter exports](../templates/obs/README.md) and [readable recipe](../templates/obs/recording-starter.json). The recipe is a checklist; import the separate native files. Linux menu-driven imports have passed; Windows import qualification remains required.
+Maintain the [OBS setup guide](../site/guide/obs-setup.html), [native starter exports](../templates/obs/README.md) and [readable recipe](../templates/obs/recording-starter.json). The recipe is a checklist; import the separate native files. Linux menu-driven imports have passed; Windows import qualification remains required.
 
 For the first release, ship validated native OBS **profile and scene-collection exports** for the tested OBS release(s), with a version manifest and import instructions. Keep the hand-written recipe as the readable source of intended defaults. Generate/export the actual files using the validated OBS version and test their import on clean Windows and Linux installations; do not hand-author undocumented OBS configuration internals.
 
@@ -267,7 +267,7 @@ These are release requirements, not results already achieved.
 
 ## Files to create/modify
 
-Current documentation: `README.md`, this specification, `docs/obs-setup.md` and `templates/obs/README.md`. Current design template: `templates/obs/recording-starter.json`. Planned implementation layout:
+Current documentation is indexed in [docs/README.md](README.md); player guides live under `site/guide/`. The portable recording recipe is `templates/obs/recording-starter.json`. Workspace layout:
 
 | Path | Responsibility |
 | --- | --- |
@@ -280,7 +280,7 @@ Current documentation: `README.md`, this specification, `docs/obs-setup.md` and 
 | `crates/library/` | SQLite schema/migrations, jobs, search and retention |
 | `crates/app/` | Service orchestration and thin application entry point |
 | `fixtures/` | Provenance-labelled synthetic or permitted logs and timing manifests |
-| `docs/` | Cross-cutting user guides, compatibility and architectural decisions |
+| `docs/` | Contributor references and dated qualification evidence |
 | `.github/workflows/` | Rust quality checks, Windows/Linux matrix and releases |
 
 ## Dependencies and verification

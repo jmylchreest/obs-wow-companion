@@ -16,3 +16,7 @@ The current public assets use a real Ruby Life Pools +17 excerpt (Kokia Blazehoo
 Review the video and screenshots before publishing replacements. Run `python3 scripts/private-session.py python3 scripts/site-smoke.py` to render desktop/mobile views and check local resources.
 
 Captures refresh content-based version parameters on image and video URLs so returning visitors fetch changed media instead of a cached copy.
+
+## Player guides
+
+`guide/` contains the canonical player documentation as standalone HTML. Keep website links within these pages; GitHub Markdown is reserved for contributor references. The same HTML and styles ship in release archives for offline reading. Run the documentation link checker and site smoke check after edits.

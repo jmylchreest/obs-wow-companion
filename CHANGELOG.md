@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Clear log beside Collapse in Events removes saved diagnostic history while new events continue to arrive.
+- Export project aide decisions before commits through cargo-husky, with a matching CI check for machine-specific paths.
+
+### Changed
+
+- Serve six focused player guides as HTML on the website and in future release archives. Consolidate contributor documentation, archive old development journals and correct outdated setup and validation instructions.
+
 ### Fixed
 
 - Version public image and video URLs after captures so returning visitors receive the updated footage.

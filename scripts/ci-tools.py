@@ -60,7 +60,7 @@ def package(directory, target):
     if len(matches) != 1:
         raise ValueError("Expected exactly one application binary")
     binary = matches[0].resolve()
-    for required in ["LICENSE", "README.md", "THIRD-PARTY-NOTICES.txt", "docs/obs-setup.md",
+    for required in ["LICENSE", "README.md", "THIRD-PARTY-NOTICES.txt", "site/guide/quick-start.html", "site/guide/obs-setup.html", "site/guide/guide.css", "site/style.css",
                      "docs/images/obs-recording.png", "templates/obs/manifest.json",
                      "templates/obs/OWC-Starter/basic.ini", "templates/obs/OWC-Starter-scenes.json"]:
         if not (binary.parent / required).is_file():

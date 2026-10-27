@@ -22,3 +22,9 @@ Inspected upstream revision `2643938980b9fe2031aa17275d3ee528bd2fd20e`:
 These are different schemas. We retain the companion schema to preserve installation identity, arbitrary markers, uncertain outcomes and export timing without inventing upstream combatant fields. No Warcraft Recorder import/export compatibility is claimed.
 
 Death markers may include `recent_hits`, containing up to three observed incoming damage events from the preceding ten seconds, oldest first. Each hit has `offset_ms` relative to the death (zero or negative), `source`, `ability` and optional `spell_id`. Relative offsets survive clip trimming without a second clock conversion. Missing/empty recaps mean data was not captured, not that no damage occurred. These are observed hits, not a guaranteed killing-blow attribution; damage amounts are not currently stored. The viewer displays newest first.
+
+## Portable player bundles
+
+Sharing uses a separate `format: "owc-share", schema_version: 1` document in `recording.json`. Marker `at_ms` values and activity bounds are relative to the exported video's start. Recent-hit offsets remain relative to each death. Markers outside the selected range are omitted; activity bounds may extend beyond it so the player can clip combat shading correctly.
+
+Paths, source plans, installation names/UUIDs and protection flags are omitted. Player names, marker text and labels remain. The standalone HTML embeds an escaped copy of the metadata for local viewing; editing `recording.json` alone does not change that copy. This is not a library-import format. See the [sharing guide](../site/guide/sharing.html) for the player workflow.

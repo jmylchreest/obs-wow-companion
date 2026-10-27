@@ -1,0 +1,13 @@
+
+.guide-header,.guide-layout,.guide-footer{max-width:1200px;margin:auto;padding:24px}
+.guide-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line,#2a3e47);gap:20px}
+.guide-header nav{display:flex;gap:20px;flex-wrap:wrap}.guide-header a,.guide-nav a{color:#b4c6cb;text-decoration:none}
+.guide-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:48px;align-items:start}
+.guide-nav{display:flex;flex-direction:column;gap:6px;position:sticky;top:24px}.guide-nav a{padding:10px 12px;border-radius:6px}.guide-nav a[aria-current]{background:#203c3c;color:#7ee0ca}.guide-nav a:hover{background:#172a30}
+.guide-layout main{min-width:0;max-width:850px}.guide-layout h1{font-size:clamp(2rem,5vw,3.2rem);letter-spacing:-.03em;line-height:1.15;margin:12px 0 16px}.guide-layout h2{font-size:1.35rem;margin:36px 0 12px;scroll-margin-top:20px}
+.guide-layout p,.guide-layout li{line-height:1.7;color:#c2d0d4}.guide-layout p{margin:0 0 16px}.guide-layout ul,.guide-layout ol{padding-left:24px;margin:12px 0 20px}.guide-layout li{margin-bottom:8px}
+.guide-intro{font-size:1.15rem}.guide-layout a,.guide-footer a{color:#7ee0ca;text-underline-offset:3px}.notice{padding:16px 20px;background:#14262c;border-left:3px solid #7ee0ca;border-radius:4px}
+.guide-layout table{border-collapse:collapse;width:100%;font-size:.95rem;margin:16px 0 24px;table-layout:fixed}.guide-layout th,.guide-layout td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #2a3e47;overflow-wrap:anywhere}.guide-layout th:first-child,.guide-layout td:first-child{width:28%}.guide-layout th{color:#e6f0f1;background:#14262c}.guide-layout td{color:#c2d0d4}
+.guide-layout pre{padding:16px;background:#061015;border:1px solid #2a3e47;border-radius:6px;overflow:auto}.guide-layout code{font-size:.9em;overflow-wrap:anywhere}.guide-layout pre code{white-space:pre;overflow-wrap:normal}.guide-footer{font-size:.85rem;color:#9aadb4;border-top:1px solid #2a3e47}
+.skip-link{position:absolute;top:-100px;left:16px;background:#7ee0ca;color:#061015;padding:10px;z-index:10}.skip-link:focus{top:10px}a:focus-visible{outline:2px solid #7ee0ca;outline-offset:4px}
+@media(max-width:760px){.guide-header,.guide-layout,.guide-footer{padding:20px}.guide-header{align-items:flex-start;flex-direction:column}.guide-layout{grid-template-columns:1fr;gap:24px}.guide-nav{position:static;display:grid;grid-template-columns:1fr 1fr;gap:4px}.guide-layout th,.guide-layout td{padding:9px}.guide-layout th:first-child,.guide-layout td:first-child{width:34%}}

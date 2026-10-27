@@ -13,7 +13,7 @@ It uses your existing OBS setup. There are Linux and Windows preview builds; Lin
 The most useful first test is simple: set it up, record a pull or key, review a death, then export a short clip. Let me know what worked, what was confusing, and anything that went wrong. Successful tests help too.
 
 - [Preview downloads](https://github.com/jmylchreest/obs-wow-companion/releases)
-- [Quick start](quick-start.md)
+- [Quick start](../site/guide/quick-start.html)
 - [Screenshots and short demo](https://jmylchreest.github.io/obs-wow-companion/)
 - [Send a test report](https://github.com/jmylchreest/obs-wow-companion/issues/new/choose)
 

@@ -3,7 +3,7 @@
 Status: **not qualified for a stable release**. Last reviewed 2026-10-27.
 The [0.1.0-dev.1 testing preview](https://github.com/jmylchreest/obs-wow-companion/releases/tag/v0.1.0-dev.1) passed all automated publication gates and is public. Its gate is documented in [releasing](releasing.md); a preview does not waive these stable-release requirements. This audit preserves the
 full [specification](specification.md), including the former 1.0 scope. Passing a
-unit test does not establish native gameplay compatibility. Historical external
+unit test does not establish native gameplay compatibility. Current external
 checks are described in [validation](validation.md); rerun them against the final
 candidate. Numbers below follow the specification's acceptance-criteria order.
 
@@ -21,13 +21,13 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 | 8 | Marker/cut alignment | Media cut and origin tests pass. Private Linux OBS marker/frame calibration measures 133.3 ms error and rejects a three-second negative control; Windows and real gameplay calibration remain required. |
 | 9 | User-owned output safety | Ownership and reconnect mock tests pass; isolated OBS evidence recorded. Native Windows counterpart outstanding. |
 | 10 | Streaming safety/load | Scene override/streaming guards tested; concurrent stream load/drop qualification outstanding. |
-| 11 | Crash export recovery | Durable plan tests and corrected process-kill smoke pass on the current Linux build (2026-10-26); Windows counterpart remains outstanding. |
+| 11 | Crash export recovery | Durable plan tests and process-kill recovery checks passed on Linux and Windows in the published preview gate. Real gameplay and disk-pressure qualification remain separate. |
 | 12 | Quota and disk exhaustion | Cleanup and low-space controller/mock-OBS tests pass, including one owned stop and preserved sources; real private-tmpfs FFmpeg and ZIP ENOSPC/retry checks pass. SQLite ENOSPC atomic rollback/reopen/retry also passes. Controller acknowledgement retention and retry after a real checkpoint ENOSPC also pass; private native Linux OBS disk exhaustion now stops output, preserves closed footage byte-for-byte and allows restart after freeing space. Native Windows and companion-integrated disk-full qualification remain. |
 | 13 | Audio tracks across both targets | Real FFmpeg track preservation, named tracks and mixing tests pass locally; native Windows playback/export qualification outstanding. |
 | 14 | 10x ingestion benchmark | Release-profile watcher/bus/SQLite benchmark passes: 100,002 lines in 0.620 seconds, expected lifecycle/marker counts retained and acknowledged queue bounded. See dated evidence for the defined synthetic reference and scope. |
 | 15 | Queue latency and progress | Isolated native Linux OBS probe measures final closure to exporting/ready snapshot at 64.54 ms with an idle worker (100 ms sampling). Competing-load and Windows qualification remain. |
 | 16 | Versioned game-mode coverage | Synthetic Retail/Classic fixtures pass. Real Temple log replay was inspected locally, but comprehensive labelled client/mode fixtures remain missing. |
-| 17 | User documentation | Setup, storage, recovery and compatibility documents exist; links/template checker passes. Continue semantic review against current UI. |
+| 17 | User documentation | Six HTML player guides cover setup, OBS, review, sharing, troubleshooting and compatibility. Contributor references and historical evidence are indexed separately. |
 | 18 | All former 1.0 features | Broad implementation exists; native Windows and real PvP/Classic validation remain unproven. |
 | 19 | Native starter imports | Linux isolated import/recording evidence recorded; clean Windows import and local-source playback outstanding. |
 | 20 | Safe import and rollback | Template checker and historical Linux rollback checks pass; Windows counterpart outstanding. |
@@ -36,30 +36,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 ## Current verification
 
-- Linux and native Windows quality jobs, plus policy, passed at `89453f8`.
-  Workspace results: Linux 90 passed and Windows 89 passed, seven opt-in skips
-  each; separate credential-store checks also passed.
-  [CI evidence](evidence/quality-ci-2026-10-26.json) does not yet establish package
-  or native gameplay qualification.
-
-- Hosted Ubuntu OBS 32.2.0 integration passed at `e65fc66`, including private
-  capture/export, delayed history, reconnect and browser setup. See
-  [remote evidence](evidence/remote-obs-2026-10-26.json). This predates the latest
-  precise-export fix and does not qualify real gameplay or Wayland capture.
-
-- Current committed Linux package (`804cd59`) passes extracted service/media,
-  native window-close, WebKit playback/UI and process-crash recovery checks. See
-  [artifact evidence](evidence/package-linux-2026-10-26.json). Clean-machine and
-  native Windows package validation remain open.
-
-- Latest local `cargo-nextest nextest run --workspace`: 95 passed, 7 opt-in tests skipped
-  (credential store, native OBS reconnect, throughput and four ENOSPC checks). Local sockets were
-  enabled for mock servers. The restricted run failed only at socket creation.
-- `cargo clippy -p owc-app --all-targets -- -D warnings`: passed after the recovery
-  and backlog fixes.
-- `python3 scripts/check-docs.py`: documentation links and OBS template data passed.
-- Temple +20 full-log replay: zero parser errors, zero detector inactivity
-  expirations, successful completion. The live timeout is not explained conclusively.
+The published preview at `b223f592a01d7113fa3d7f8614686c0b5e25a063` passed all automated publication gates, including native Windows packages, installers and crash recovery. [Validation](validation.md) records the run and current evidence. Older checks remain in the [dated journal](archive/validation-2026-10.md); their earlier failures and pending checks must not be read as current results.
 
 ## Additional source-contract gaps
 
@@ -91,21 +68,13 @@ all first-release features are finished.
 The repository contract also has a competing-writer regression: SQLite returns
 `DatabaseBusy` after three seconds without advancing the cursor or partially
 inserting an activity; retry and reopen preserve exactly one durable activity.
-This regression and the cancelled OBS queue regression are included in the
-95-test workspace run above. It does
-not prove bounded I/O on an unresponsive filesystem.
+These regressions are included in workspace tests. They do not prove bounded I/O on an unresponsive filesystem.
 
-## Next execution sequence
+## Remaining stable-release work
 
-1. Validate crash/low-space behaviour and sharing publication integrity on local
-   isolated fixtures; retain failed-job sources and never publish partial assets.
-2. Run candidate build, browser/native Linux smoke, MSRV, packaging, policy and
-   release-boundary checks; fix regressions and record exact evidence.
-3. Finish source-to-spec audit of UI, queue bounds, media cancellation, installation
-   and recovery behaviour. Missing functionality remains work, not a waived gate.
-4. Qualify native Windows and GNOME/KDE Wayland capture using appropriate machines,
-   and gather permitted real client-mode fixtures. Cross-compilation is insufficient.
-5. Inspect and resolve the initial remote CI runs, then execute release jobs after qualification. Publish only
-   after all mandatory quality/package/runtime gates pass.
+1. Complete native Windows and GNOME/KDE Wayland capture/playback walkthroughs, including permissions, audio and existing OBS profiles.
+2. Gather permitted real client-mode fixtures and verify marker timing, split continuity and overlapping encounters under load.
+3. Finish platform-specific disk-pressure, sleep/resume and streaming qualification. Preserve failed-job sources and never publish partial assets.
+4. Re-run the automated release gates against the final candidate and retain exact evidence.
 
-No user library, live OBS configuration or recordings were changed by this audit.
+A public preview invites this testing; it does not waive the specification.

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 scripts/shared-context.py export
+elif command -v python >/dev/null 2>&1; then
+    exec python scripts/shared-context.py export
+fi
+printf '%s\n' 'Python 3 is needed to export/check aide decisions before committing.' >&2
+exit 1

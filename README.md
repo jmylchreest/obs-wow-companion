@@ -1,79 +1,25 @@
 # OBS WoW Companion
 
-**Record the pull. Learn from the replay.**
+Record WoW encounters with your existing OBS setup, review deaths and boss markers, and share clips with your group. Free, open source, and built for Windows and Linux.
 
-A free, open-source companion for World of Warcraft players who use OBS. Automatically record encounters, jump back to a death, slow down a boss mechanic, and share the moment with your group.
+[Download the preview](https://github.com/jmylchreest/obs-wow-companion/releases) · [Player guide](https://jmylchreest.github.io/obs-wow-companion/guide/quick-start.html) · [Website and demo](https://jmylchreest.github.io/obs-wow-companion/) · [Report a problem](https://github.com/jmylchreest/obs-wow-companion/issues/new/choose)
 
-[Take a look](https://jmylchreest.github.io/obs-wow-companion/) · [Quick start](docs/quick-start.md) · [OBS setup guide](docs/obs-setup.md) · [Compatibility](docs/compatibility.md) · [Report a problem](https://github.com/jmylchreest/obs-wow-companion/issues)
+![Ruby Life Pools in the recording library and player; gameplay obscured for privacy](site/assets/review.png)
 
-![The recording library and video review player, using fictional library entries and gameplay obscured for privacy](site/assets/review.png)
+This is an **early testing preview**. Linux and Windows packages pass automated checks, but real gameplay coverage varies. Try a short recording before relying on it for raid night. [Tested platforms and modes](https://jmylchreest.github.io/obs-wow-companion/guide/compatibility.html).
 
-> **Development preview:** the app works in local Linux testing, but it is still an early build. Windows packages have automated checks; real gameplay testing is still needed. Check the [compatibility matrix](docs/compatibility.md) before relying on it for raid night. The demo uses cropped, softened and muted gameplay; library entries and markers are demonstration data.
+- Record supported encounters automatically from the combat log, or use **Record now**.
+- Jump five seconds before a death, seek boss markers, slow playback and select audio tracks.
+- Find runs by activity, difficulty, key level, date or labels. Favourite useful pulls and protect recordings you want to keep.
+- Export a ZIP containing the video, markers and an offline web player.
 
-## What you can do
+OBS handles capture, scenes, audio and recording encoders. Install OBS and FFmpeg separately, follow setup, select WoW's Logs folder and enable `/combatlog`. There is no account or automatic upload. Recordings started independently in OBS remain under your control.
 
-- **Record automatically.** Supported encounters in your WoW combat log start OBS recording. Use **Record now** for manual clips.
-- **Review the important moments.** Click a death to seek five seconds before it. Boss and combat markers show where the action happened.
-- **Watch at your pace.** Fullscreen, slow playback, fine seeking, zoom and selectable audio tracks.
-- **Find your runs.** Filter by key level, raid difficulty, outcome or date. Add labels, favourite pulls and protect recordings you want to keep.
-- **Share a useful replay.** Pick a range and audio tracks, then export a ZIP containing the video, markers and a portable web player.
-- **Keep disk use under control.** Separate recording and library budgets, with protected clips and unfinished work kept safe.
-
-OBS still handles your scenes, game capture, microphone and encoding. Companion does not replace OBS or require an account.
-
-## Get started
-
-### 1. Get a working OBS recording
-
-Install **OBS Studio** and **FFmpeg, including ffprobe**. Make sure OBS records the right WoW window and the sound you want.
-
-Already use OBS? Keep your scenes. Starting fresh? There is an optional [OBS starter profile and scene collection](templates/obs/README.md). You still select your own window, audio devices and recording location.
-
-Linux needs GTK 3 and WebKitGTK 4.1 runtime libraries. Windows needs WebView2 Runtime. OBS and FFmpeg are installed separately.
-
-### 2. Launch Companion and follow setup
-
-Download the [development preview](https://github.com/jmylchreest/obs-wow-companion/releases), extract the archive and run the app. You do not need Rust. See the [quick start](docs/quick-start.md) for platform requirements. The setup wizard walks you through:
-
-1. **OBS connection:** in OBS, open **Tools → WebSocket Server Settings**, enable the server and authentication, and enter its password in Companion.
-2. **Recording settings:** choose the companion recording folder and check the recommended output settings.
-3. **Picture and sound:** confirm your existing OBS setup captures what you want.
-4. **WoW installs:** select detected installations, search another folder, or enter your WoW **Logs** directory manually. Multiple installs are supported, including Wine/Proton locations on Linux.
-
-The detailed [OBS guide](docs/obs-setup.md) covers platform capture choices, multiple audio tracks, scene switching and troubleshooting.
-
-### 3. Turn on combat logging and play
-
-Enter `/combatlog` in WoW, or use your preferred logging addon. Leave OBS and Companion open with **Auto recording on**.
-
-A fresh supported encounter starts recording automatically. After it finishes, Companion keeps the configured extra footage, closes capture it owns, and prepares your clip. You can review closed footage while a longer recording continues.
-
-**Try a short recording first.** Verify the picture, game sound and microphone before a long session.
-
-## Good to know
-
-| Question | Answer |
-| --- | --- |
-| Does it record before a pull? | Only when that footage already exists in retained files. Starting OBS at the pull cannot recover earlier video. |
-| What if OBS is already recording? | Companion observes your recording. It does not stop or split it, and clips may wait until you stop it in OBS. |
-| Can I keep streaming? | Companion leaves streaming alone. Recording uses OBS's program output; it does not create a separate game-only recording composition. |
-| What if I close OBS? | Companion reconnects automatically. Interrupted footage can be unavailable; the encounter is kept with a warning. |
-| Do I need to wait before quitting? | No. Quit stops owned capture and preserves unfinished automatic clips for processing next launch. Interrupted sharing ZIP exports need retrying. |
-| What game modes work? | Coverage varies by version and mode. The first-release scope includes raids, Mythic+, arenas, Solo Shuffle, battlegrounds and Classic, with experimental Retail delve recording. See the [tested compatibility matrix](docs/compatibility.md). |
-| Are recordings uploaded anywhere? | No automatic uploads. Recordings stay on your machine. Exporting and sharing are your choice. |
-| Is macOS supported? | Not in the first release. Windows x86-64 and Linux x86-64 are the release targets. |
-
-## Sharing with your group
-
-Open a recording, expand **Export**, select a range if needed, choose the audio tracks and save the ZIP. Extract it and open `index.html` to use the included player. If the browser blocks local video access, use its video-file picker. You can also host the extracted bundle on a static website.
-
-[Sharing guide](docs/sharing.md) · [Watch the actual controls with demo footage](https://jmylchreest.github.io/obs-wow-companion/#demo)
+The [HTML player guide](https://jmylchreest.github.io/obs-wow-companion/guide/quick-start.html) covers setup, review, sharing and troubleshooting. Future release archives include it too: open `site/guide/quick-start.html` locally. Public screenshots use obscured, muted Ruby Life Pools footage with demonstration markers and library data.
 
 ## Building from source
 
-For a packaged build, use the [GitHub prerelease downloads](https://github.com/jmylchreest/obs-wow-companion/releases). These are early test builds, not a stable release or a compatibility guarantee.
-
-To build from source, install **Rust 1.95 or newer**, clone this repository, then run:
+Use Rust 1.95 or newer and the platform build dependencies in [Development](docs/development.md):
 
 ```sh
 git clone https://github.com/jmylchreest/obs-wow-companion.git
@@ -81,28 +27,10 @@ cd obs-wow-companion
 cargo run --locked --bin obs-wow-companion
 ```
 
-On Ubuntu 24.04, install the build dependencies first:
+[Contributor documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
-```sh
-sudo apt install build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libdbus-1-dev ffmpeg
-```
+## Licence
 
-On Windows, use the MSVC Rust toolchain, Visual Studio C++ Build Tools, and WebView2 Runtime. Install OBS and FFmpeg separately, with `ffmpeg` and `ffprobe` on your PATH or selected in Companion's Media tools settings.
-
-Optional launch arguments:
-
-- `--browser`: open the interface in your browser.
-- `--no-open`: run the local service and print its private session link.
-- `--data-dir /absolute/path`: use a separate library and settings directory.
-
-## Help test it
-
-[Send a test report or report a problem](https://github.com/jmylchreest/obs-wow-companion/issues/new/choose) with your operating system, OBS version, game version and a short description of what happened. The app's **Events** panel helps explain connection, recording and export problems. Remove passwords and personal information before sharing diagnostics.
-
-For contributors: [implementation plan](docs/implementation-plan.md), [specification](docs/specification.md), [release audit](docs/release-audit.md), [validation evidence](docs/validation.md), [CI](docs/ci.md) and [release instructions](docs/releasing.md).
-
-## License
-
-[MIT](LICENSE). Bundled dependency notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+[MIT](LICENSE). Dependencies retain their own licences; see [third-party notices](THIRD-PARTY-NOTICES.txt).
 
 An independent community project, not affiliated with Blizzard Entertainment or the OBS Project. World of Warcraft is a trademark of Blizzard Entertainment.

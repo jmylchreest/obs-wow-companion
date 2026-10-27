@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Check repository Markdown links and reject machine-specific OBS starter data."""
+"""Check repository Markdown/HTML links and reject machine-specific OBS starter data."""
+from html.parser import HTMLParser
+from urllib.parse import urlsplit, unquote
 import json
 from pathlib import Path
 import re
@@ -7,13 +9,31 @@ import sys
 
 root = Path(__file__).resolve().parent.parent
 errors = []
-for source in [root / "README.md", *(root / "docs").rglob("*.md"), *(root / "templates").rglob("*.md")]:
-    for target in re.findall(r"\]\(([^)]+)\)", source.read_text(encoding="utf-8")):
-        target = target.split("#")[0]
-        if not target or re.match(r"[a-z]+://", target):
+class Page(HTMLParser):
+    def __init__(self, source):
+        super().__init__()
+        self.links, self.ids = [], set()
+        self.feed(source.read_text(encoding="utf-8"))
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if "id" in attrs:
+            self.ids.add(attrs["id"])
+        self.links.extend(attrs[key] for key in ("href", "src", "poster") if attrs.get(key))
+
+pages = {source.resolve(): Page(source) for source in (root / "site").rglob("*.html")}
+sources = [root / "README.md", *(root / "docs").rglob("*.md"), *(root / "templates").rglob("*.md"), *pages]
+for source in sources:
+    links = pages[source].links if source in pages else re.findall(r"\]\(([^)]+)\)", source.read_text(encoding="utf-8"))
+    for target in links:
+        url = urlsplit(target)
+        if url.scheme or url.netloc:
             continue
-        if not (source.parent / target).exists():
+        destination = (source.parent / unquote(url.path)).resolve() if url.path else source.resolve()
+        if not destination.exists():
             errors.append(f"{source.relative_to(root)}: missing {target}")
+        elif url.fragment and destination in pages and unquote(url.fragment) not in pages[destination].ids:
+            errors.append(f"{source.relative_to(root)}: missing anchor {target}")
 for source in (root / "templates/obs").rglob("*"):
     if not source.is_file() or source.suffix not in (".ini", ".json"):
         continue

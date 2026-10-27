@@ -71,5 +71,7 @@ jobs:
       - name: Lint workflows and publication gates
         run: |
           python3 scripts/ci-tools.py actionlint
-          python3 -m unittest discover -s scripts -p 'test_ci*.py'
+          python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: python3 scripts/check-docs.py
+      - name: Check shared aide decisions
+        run: python3 scripts/shared-context.py check

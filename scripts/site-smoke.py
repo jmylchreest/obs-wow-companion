@@ -52,7 +52,17 @@ try:
         time.sleep(.5)
         (root/(name+"-setup.png")).write_bytes(base64.b64decode(driver(prefix+"/screenshot")))
         js("window.scrollTo(0,0)")
-    assert js("return [...document.querySelectorAll('a')].filter(a=>a.getAttribute('href').startsWith('#')).every(a=>!a.hash||a.hash==='#'||document.getElementById(a.hash.slice(1)))")
+    for guide in sorted(Path("site/guide").glob("*.html")):
+        driver(prefix+"/url",{"url":f"http://127.0.0.1:{server.server_port}/guide/{guide.name}"})
+        for name,width,height in [("desktop",1440,1000),("mobile",390,844)]:
+            driver(prefix+"/window/rect",{"width":width,"height":height})
+            time.sleep(.2)
+            assert js("return document.documentElement.scrollWidth<=innerWidth"), f"{guide}: horizontal overflow"
+            assert js("return document.querySelector('main')&&document.querySelector('[aria-current=page]')"), f"{guide}: missing navigation"
+            resources=js("return [...document.querySelectorAll('[src],link[href],a[href]')].map(e=>e.src||e.href).filter(v=>v&&v.startsWith(location.origin))")
+            for resource in resources:
+                urllib.request.urlopen(resource).read()
+            (root/(guide.stem+"-"+name+".png")).write_bytes(base64.b64decode(driver(prefix+"/screenshot")))
     driver(prefix,method="DELETE")
     print(f"Desktop/mobile site and local resources passed: {root}")
 finally:

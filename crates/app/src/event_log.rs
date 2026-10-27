@@ -54,6 +54,21 @@ impl EventLog {
         }
         log
     }
+    pub fn clear(&mut self) -> anyhow::Result<()> {
+        for path in [
+            self.path.with_file_name("events.previous.jsonl"),
+            self.path.clone(),
+        ] {
+            match std::fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        self.entries.clear();
+        self.error = None;
+        Ok(())
+    }
     fn retain(&mut self, entry: Entry) {
         self.entries.push_back(entry);
         while self.entries.len() > CAPACITY {
@@ -107,6 +122,24 @@ impl EventLog {
 mod tests {
     use super::*;
     use std::io::{Seek, SeekFrom};
+    #[test]
+    fn clearing_removes_rotated_history_and_new_events_still_persist() {
+        let root = tempfile::tempdir().expect("root");
+        let mut log = EventLog::new(root.path());
+        log.push("OBS", "info", "Old event");
+        std::fs::copy(&log.path, root.path().join("events.previous.jsonl")).expect("rotation");
+        let unrelated = root.path().join("recording.json");
+        std::fs::write(&unrelated, "metadata").expect("recording metadata");
+        log.clear().expect("clear");
+        assert!(log.entries.is_empty());
+        assert!(EventLog::new(root.path()).entries.is_empty());
+        assert!(unrelated.exists());
+        log.clear().expect("already empty");
+        log.push("OBS", "info", "New event");
+        let restored = EventLog::new(root.path());
+        assert_eq!(restored.entries.len(), 1);
+        assert_eq!(restored.entries[0].message, "New event");
+    }
     #[test]
     fn bounded_history_survives_restart_rotation_and_partial_lines() {
         let root = tempfile::tempdir().expect("root");

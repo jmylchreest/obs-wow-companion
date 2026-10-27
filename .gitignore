@@ -1,5 +1,6 @@
 /target/
-/.aide/
+/.aide/*
+!/.aide/shared/
 /.agents/
 /.codex/
 /.aws/
