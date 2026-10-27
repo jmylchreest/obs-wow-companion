@@ -16,12 +16,16 @@
 
 ### Changed
 
+- Remove superseded planning and validation diaries and the duplicate tooltip inventory; keep current guidance and Git history.
+
 - Refresh Rust dependencies, desktop webview libraries and pinned CI tools. Keep saved OBS credentials in the native system store.
 - Reuse the prepared database statement when saving a batch of recordings.
 
 - Serve six focused player guides as HTML on the website and in future release archives. Consolidate contributor documentation, archive old development journals and correct outdated setup and validation instructions.
 
 ### Fixed
+
+- Backport the upstream GLib string-iterator correction for the Linux desktop stack (RUSTSEC-2024-0429), and check transitive unsoundness advisories.
 
 - Wait for a cancelled FFmpeg process to stop before reporting cancellation or removing its temporary files.
 

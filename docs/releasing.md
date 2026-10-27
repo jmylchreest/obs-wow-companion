@@ -4,7 +4,7 @@ The repository has a working development build. A successful package build alone
 
 ## Local checks
 
-Install cargo-nextest 0.9.149, cargo-deny 0.20.2 and cargo-dist 0.32.0 using `cargo install … --version … --locked`. Run formatting, strict Clippy, nextest, doc tests, `cargo deny check` and `python3 scripts/check-docs.py`. Run the isolated OBS and desktop checks documented in validation.
+Install cargo-nextest 0.9.150, cargo-deny 0.20.2 and cargo-dist 0.32.0 using `cargo install … --version … --locked`. Run formatting, strict Clippy, nextest, doc tests, `cargo deny check` and `python3 scripts/check-docs.py`. Run the isolated OBS and desktop checks documented in validation.
 
 Build artifacts with `dist build --artifacts=local --target x86_64-unknown-linux-gnu` on Linux and the equivalent `x86_64-pc-windows-msvc` target on Windows. Artifacts include the offline HTML player guide, contributor documentation, OBS templates and SHA-256 checksums. OBS and FFmpeg are separate installations. Linux also needs GTK3 and WebKitGTK 4.1 runtime libraries; Windows needs WebView2 Runtime.
 
@@ -24,7 +24,7 @@ Workflows are maintained explicitly; do not overwrite them with `dist generate`.
 
 ## Dependency policy
 
-The lockfile fixes the dependency graph. cargo-deny checks the actual Linux/Windows targets, rejects unknown registries and licences outside the allowlist, and checks advisories. The single maintenance exception documents `proc-macro-error` through GTK3 build macros; revisit it when updating Tao/Wry. Duplicated transitive major versions remain warnings. Dependencies for excluded platforms are not part of the advertised support policy.
+The lockfile fixes the dependency graph. cargo-deny checks Linux, Windows and both macOS architectures, rejects unknown registries and licences outside the allowlist, and checks advisories. The single maintenance exception documents `proc-macro-error` through GTK3 build macros; revisit it when updating Tao/Wry. Duplicated transitive major versions remain warnings. The GLib compatibility backport is documented and verified under `vendor/`; it fixes the Linux string-iterator unsoundness without an advisory exception. Source CI coverage does not imply published macOS packages.
 
 ## Development preview gate
 

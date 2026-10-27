@@ -26,7 +26,7 @@ missing = []
 upstream = root / "licenses/upstream"
 fallbacks = json.loads((upstream / "manifest.json").read_text(encoding="utf-8"))
 for package in sorted(metadata["packages"], key=lambda p:(p["name"],p["version"])):
-    if package["source"] is None or package["id"] not in included:
+    if (package["source"] is None and not Path(package["manifest_path"]).is_relative_to(root / "vendor")) or package["id"] not in included:
         continue
     directory = Path(package["manifest_path"]).parent
     licenses = []

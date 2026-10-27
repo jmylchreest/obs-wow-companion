@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["vendor/glib"]
 members = ["crates/domain", "crates/wow-log", "crates/obs-client", "crates/capture", "crates/media", "crates/library", "crates/app"]
 resolver = "3"
 
@@ -63,3 +64,7 @@ lto = "thin"
 inherits = "release"
 debug = 2
 strip = false
+
+[patch.crates-io]
+# GTK3 still requires 0.18; retain the upstream unsoundness fix until it can move.
+glib = { path = "vendor/glib" }

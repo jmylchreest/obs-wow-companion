@@ -47,6 +47,9 @@ jobs:
         run: |
           cargo bench -p owc-wow-log --bench ingestion --locked
           cargo bench -p owc-library --bench library --locked
+      - name: GLib security regression (optimised)
+        if: runner.os == 'Linux'
+        run: cargo test -p owc-app --release --no-default-features --test glib_variant --locked
       - name: Profiling service fixture
         if: runner.os == 'Linux'
         env:

@@ -36,7 +36,7 @@ candidate. Numbers below follow the specification's acceptance-criteria order.
 
 ## Current verification
 
-The published preview at `b223f592a01d7113fa3d7f8614686c0b5e25a063` passed all automated publication gates, including native Windows packages, installers and crash recovery. [Validation](validation.md) records the run and current evidence. Older checks remain in the [dated journal](archive/validation-2026-10.md); their earlier failures and pending checks must not be read as current results.
+The published preview at `b223f592a01d7113fa3d7f8614686c0b5e25a063` passed all automated publication gates, including native Windows packages, installers and crash recovery. [Validation](validation.md) records the run and current evidence. Older journals remain in Git history; earlier failures and pending checks must not be read as current results.
 
 ## Additional source-contract gaps
 
