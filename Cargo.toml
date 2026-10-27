@@ -23,7 +23,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.22"
 sha2 = "0.10"
 futures-util = "0.3"
-tokio-tungstenite = "0.28"
+tokio-tungstenite = "0.30"
 rusqlite = { version = "0.38", features = ["bundled"] }
 axum = "0.8"
 wry = "0.53"
