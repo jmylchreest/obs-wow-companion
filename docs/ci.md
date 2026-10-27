@@ -7,7 +7,7 @@ The public testing preview passed the Linux and Windows quality, package, recove
 | Workflow | Trigger | What must pass |
 | --- | --- | --- |
 | CI | PR, push to main, manual, weekly | Reusable quality and package workflows |
-| Quality | Called by CI or Release | Rust 1.95 formatting, strict Clippy, nextest and doc tests on Ubuntu 24.04 / Windows 2025; docs, cargo-deny, notice consistency, actionlint and release-boundary tests |
+| Quality | Called by CI or Release | Rust 1.95 formatting, strict Clippy, nextest and doc tests on Ubuntu 24.04 / Windows 2025 / macOS 14; executable discovery and real media operations on all three; docs, cargo-deny, notice consistency, actionlint and release-boundary tests |
 | Packages | Called after quality succeeds | Native Linux GNU / Windows MSVC archives, SHA-256 and binary-version checks, required docs/templates/notices, packaged service/media tests on both OSes; Linux native window/WebKit playback and Linux/Windows process-crash recovery |
 | Packages: bundle/installers | After both native archive jobs succeed | cargo-dist shell/PowerShell installers and source archive; embedded archive checksums; private installation and installed-service tests on both OSes |
 | OBS integration | Manual and weekly | Official OBS Ubuntu PPA, isolated virtual display/profile, recording/splits and manual/log-triggered two-track exports; records installed OBS version |
@@ -32,7 +32,7 @@ Require successful quality and package checks before merging. To use release pre
 
 Review version/changelog changes and the [release qualification gates](release-audit.md) before pushing a matching `vVERSION` tag. A tag triggers publication; an ordinary CI run or release-PR preparation does not.
 
-No crates.io token is needed. OBS and FFmpeg remain separately installed runtime dependencies. CI installs FFmpeg on both runners; this does not bundle it into the app.
+No crates.io token is needed. OBS and FFmpeg remain separately installed runtime dependencies. CI installs FFmpeg on all three quality runners; this does not bundle it into the app.
 
 ## Local verification
 
@@ -41,3 +41,5 @@ Run `python3 scripts/ci-tools.py actionlint`, then `python3 -m unittest discover
 For a local archive, set `DIST_TARGET` to its Rust target and run `python3 scripts/ci-tools.py package target/distrib`. The helper validates the checksum, extracts into a private directory, checks contents and runs the binary. In Actions it sets `OWC_BINARY` for subsequent probes. `scripts/service-smoke.py` works on both target OSes; native WebView2 interaction still needs separate Windows qualification.
 
 The installer smoke test serves artifacts from a private loopback HTTP server, uses cargo-dist's unmanaged temporary installation setting and disables PATH changes. It does not alter the user's normal installation. Passing it proves the install mechanism and local service; it does not prove game capture or that every clean machine has the required system libraries.
+
+The media-tool smoke test runs the Rust adapter in separate processes with normal PATH lookup, a Unicode/spaced tools directory, absolute executable paths with an empty PATH, and either or both tools missing. It probes a two-track fixture, mixes audio, decodes the result, extracts a thumbnail and checks that the source is unchanged and output handles are released. Run `python3 scripts/media-tools-smoke.py` locally. macOS source tests do not qualify its desktop playback, keychain integration or installers; no macOS package is published. Hosted runners also do not establish hardware encoder compatibility.

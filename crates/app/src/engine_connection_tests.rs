@@ -477,7 +477,15 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
                         requests.lock().expect("requests").push(kind.into());
                         let data = match kind {
                             "GetVersion" => json!({"availableRequests":[]}),
-                            "GetRecordStatus" => current.lock().expect("state").clone(),
+                            "GetRecordStatus" => {
+                                let mut status = current.lock().expect("state").clone();
+                                status["outputDuration"] = json!(
+                                    status["outputDuration"].as_i64().expect("duration")
+                                        + Engine::now()
+                                        - now
+                                );
+                                status
+                            }
                             "GetOutputList" => {
                                 json!({"outputs":[{"outputName":"recording","outputActive":true}]})
                             }
@@ -637,7 +645,9 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
             );
             assert_eq!(saved["recording"]["path"], next.to_string_lossy().as_ref());
             let mut restarted = engine(root.path(), port);
-            let status = current.lock().expect("state").clone();
+            let mut status = current.lock().expect("state").clone();
+            status["outputDuration"] =
+                json!(status["outputDuration"].as_i64().expect("duration") + Engine::now() - now);
             assert!(
                 restarted
                     .recover_recording(resumed.obs.as_ref().expect("client"), &status)

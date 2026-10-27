@@ -4,6 +4,8 @@
 
 ### Added
 
+- Add macOS to source CI and exercise FFmpeg/ffprobe lookup, explicit Unicode paths, missing tools and real media operations on Linux, Windows and macOS.
+
 - Clear log beside Collapse in Events removes saved diagnostic history while new events continue to arrive.
 - Export project aide decisions before commits through cargo-husky, with a matching CI check for machine-specific paths.
 
@@ -12,6 +14,8 @@
 - Serve six focused player guides as HTML on the website and in future release archives. Consolidate contributor documentation, archive old development journals and correct outdated setup and validation instructions.
 
 ### Fixed
+
+- Make the fake OBS recovery timer advance with elapsed time so slower CI runners exercise the same ownership checks reliably.
 
 - Preserve verified OBS output identity after the first recording fragment is cleaned up, so later splits still save a recoverable ownership checkpoint. Log post-roll stop decisions and ownership rejection reasons.
 

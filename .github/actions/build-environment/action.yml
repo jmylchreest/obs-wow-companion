@@ -18,6 +18,10 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: choco install ffmpeg --no-progress -y
+    - name: macOS media tools
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
     - name: Rust toolchain
       shell: bash
       run: |
