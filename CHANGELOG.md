@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- Stop a verified Companion-owned OBS recording after restart when its interrupted key is abandoned, whichever startup event arrives first.
+
 - Version public image and video URLs after captures so returning visitors receive the updated footage.
 
 - Use Ruby Life Pools footage for the public screenshots and demo, matching the selected recording.

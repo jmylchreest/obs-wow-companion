@@ -688,10 +688,17 @@ impl Engine {
         self.message = format!("Recording {}", activity.name);
         Ok(())
     }
+    fn retire_automatic_activity(&mut self, id: Uuid) -> bool {
+        self.deferred_starts.retain(|pending| pending.id != id);
+        let tracked = self.automatic_activities.remove(&id);
+        if tracked && self.automatic_session && self.automatic_activities.is_empty() {
+            self.automatic_stop =
+                Some(Instant::now() + Duration::from_secs(u64::from(self.config.post_seconds)));
+        }
+        tracked
+    }
     fn activity_finished(&mut self, mut activity: Activity) {
-        self.deferred_starts
-            .retain(|pending| pending.id != activity.id);
-        let tracked = self.automatic_activities.remove(&activity.id);
+        let tracked = self.retire_automatic_activity(activity.id);
         let interrupted = self.interrupted_activities.remove(&activity.id);
         // A delayed completion can arrive after capture has stopped, or while
         // OBS is unavailable. Keep its metadata so the planner can recover closed
@@ -704,10 +711,6 @@ impl Engine {
                 );
             }
             self.completed_events.push(activity);
-        }
-        if tracked && self.automatic_session && self.automatic_activities.is_empty() {
-            self.automatic_stop =
-                Some(Instant::now() + Duration::from_secs(u64::from(self.config.post_seconds)));
         }
     }
     fn recover_manual(db: &mut Library, logs: &mut BTreeMap<String, LogState>) -> Result<()> {
@@ -999,6 +1002,10 @@ impl Engine {
                 ActivityEvent::Updated(_) | ActivityEvent::Diagnostic(_) => continue,
             };
             if recovered {
+                // OBS ownership may be restored before this watcher's restart batch.
+                // Retire its capture reference even when today's filters exclude it.
+                self.retire_automatic_activity(activity.id);
+                self.interrupted_activities.remove(&activity.id);
                 self.completed_events.push(activity);
                 continue;
             }

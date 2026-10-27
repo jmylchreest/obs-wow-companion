@@ -511,10 +511,12 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
         automatic: true,
         scene_restore: None,
     };
-    for (duration, paused, expected) in [
-        (5100, false, true),
-        (100, false, false),
-        (5100, true, false),
+    for (duration, paused, expected, abandon_before_connect) in [
+        (5100, false, true, Some(false)),
+        (5100, false, true, Some(true)),
+        (5100, false, true, None),
+        (100, false, false, None),
+        (5100, true, false, None),
     ] {
         let first = engine(root.path(), port);
         first
@@ -529,6 +531,64 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
         current.lock().expect("state")["outputPaused"] = json!(paused);
         let mut resumed = engine(root.path(), port);
         resumed.config.post_seconds = 0;
+        let mut abandonment = if abandon_before_connect.is_some() {
+            let installation = crate::config::Installation {
+                id: Uuid::new_v4(),
+                name: "Retail".into(),
+                logs: root.path().into(),
+                flavour: owc_wow_log::Flavour::Retail,
+                categories: vec![],
+                difficulties: vec![],
+                minimum_key: 0,
+                minimum_raid_difficulty: None,
+            };
+            let mut activity = Activity::new(
+                Kind::MythicPlus,
+                "Interrupted key".into(),
+                now - 5000,
+                "Retail",
+            );
+            activity.installation_id = Some(installation.id);
+            let mut state = LogState::new(&installation);
+            state.detector.active = Some(activity.clone());
+            resumed
+                .logs
+                .insert(installation.id.to_string(), state.clone());
+            resumed.config.installations.push(installation.clone());
+            activity.finish(now - 1000, Outcome::Abandoned);
+            state.detector.active = None;
+            let (committed, _) = tokio::sync::oneshot::channel();
+            Some(LogBatch {
+                generation: resumed.log_generation,
+                installation_id: installation.id,
+                state,
+                events: vec![LogEvent {
+                    source: crate::log_watcher::Source {
+                        installation_id: installation.id,
+                        installation_name: installation.name,
+                        flavour: installation.flavour,
+                        logs_directory: installation.logs,
+                        log_file: None,
+                        line: None,
+                    },
+                    event: ActivityEvent::Abandoned {
+                        activity,
+                        reason: AbandonReason::Restart,
+                    },
+                }],
+                parse_errors: 0,
+                error: None,
+                committed,
+            })
+        } else {
+            None
+        };
+        if abandon_before_connect == Some(true) {
+            resumed
+                .log_batch(abandonment.take().expect("batch"))
+                .await
+                .expect("abandon before reconnect");
+        }
         resumed
             .command(json!({"action":"connect"}))
             .await
@@ -544,10 +604,35 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
             }
         );
         requests.lock().expect("requests").clear();
+        if let Some(batch) = abandonment {
+            resumed
+                .log_batch(batch)
+                .await
+                .expect("abandon after reconnect");
+        }
         if expected {
-            resumed.automatic_stop = Some(Instant::now());
+            assert!(
+                resumed.automatic_activities.is_empty(),
+                "restart abandonment must release capture"
+            );
+            assert!(
+                resumed.automatic_stop.is_some(),
+                "restart must schedule closure itself"
+            );
         }
         resumed.tick().await.expect("tick");
+        resumed.tick().await.expect("stop remains pending");
+        if abandon_before_connect.is_some() {
+            assert!(
+                resumed
+                    .db
+                    .list()
+                    .expect("saved activities")
+                    .iter()
+                    .any(|entry| entry["name"] == "Interrupted key"
+                        && entry["outcome"] == "abandoned")
+            );
+        }
         if expected {
             assert_eq!(
                 resumed.processing_status(&pending, &[])["stage"],
@@ -560,8 +645,9 @@ async fn persisted_owned_recording_resumes_and_stops_after_reconnect() {
                 .lock()
                 .expect("requests")
                 .iter()
-                .any(|r| r == "StopRecord"),
-            expected
+                .filter(|r| *r == "StopRecord")
+                .count(),
+            usize::from(expected)
         );
         if let Some(watcher) = resumed.obs_watcher.take() {
             watcher.abort();
