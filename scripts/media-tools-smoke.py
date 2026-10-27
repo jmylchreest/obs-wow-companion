@@ -13,6 +13,14 @@ from media_fixture import create_fixture
 
 def main():
     tools = {name: Path(shutil.which(name)).resolve() for name in ("ffmpeg", "ffprobe")}
+    # Chocolatey's PATH entry can be a shim, which cannot be relocated on its own.
+    if os.name == "nt":
+        chocolatey = Path(os.environ.get("ChocolateyInstall", r"C:\ProgramData\chocolatey"))
+        for name, source in tools.items():
+            if source.parent == chocolatey / "bin":
+                candidates = list((chocolatey / "lib" / "ffmpeg").rglob(name + ".exe"))
+                assert len(candidates) == 1, f"Cannot locate actual {name} behind Chocolatey shim: {candidates}"
+                tools[name] = candidates[0]
     report = {"platform": platform.platform(), "tools": {}, "passed": []}
     for name, executable in tools.items():
         report["tools"][name] = subprocess.check_output([str(executable), "-version"], text=True).splitlines()[0]
