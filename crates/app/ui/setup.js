@@ -60,11 +60,13 @@ function checksInto(id,checks){
 function renderSetup(){
   if(!state.config)return;
   const report=state.setup||{},checks=report.checks||[];
-  const [title,detail]=connectionLabels[report.connection]||connectionLabels.checking;
+  const connectionCode=state.obs_connection_error?.code;
+  const unreachable=!state.connected&&connectionCode==='unreachable';
+  const [title,detail]=connectionLabels[unreachable?'unreachable':report.connection]||connectionLabels.checking;
   const failed=checks.some(c=>c.status==='fail');
-  $('credential-status').textContent=state.credential_status||'';
-  const passwordSaved=['Password saved in your system password store.','Connected using your saved password.'].includes(state.credential_status);
-  $('credential-status').hidden=wizardStep!==0||!state.credential_status||passwordSaved||state.credential_status==='Connected for this session.';
+  $('credential-status').textContent=noticeText('credential',state.credential_status);
+  const passwordSaved=state.credential_status?.code==='saved';
+  $('credential-status').hidden=unreachable||wizardStep!==0||!state.credential_status||passwordSaved||state.credential_status?.code==='session';
   $('wizard-success').textContent=passwordSaved?'✓ Connected to OBS. Password saved securely.':'✓ Connected to OBS successfully.';
   $('wizard-success').hidden=wizardStep!==0||!state.connected;
   const stepChecks=[
@@ -81,13 +83,15 @@ function renderSetup(){
     button.setAttribute('aria-label',`${stepNames[index]}: ${status==='pass'?'checks passed':status==='fail'?'needs attention':status==='warn'?'review warnings':status==='optional'?'optional help':'not verified'}`);
   });
   $('connection').textContent=title;
-  const notes=checks.filter(check=>['fail','warn'].includes(check.status)).map(check=>check.detail||check.title);
-  const credential=state.credential_status||'';
-  const routineCredentials=['Reconnected to OBS.','Connected for this session.','Connected using your saved password.','Password saved in your system password store.'];
-  if(credential&&!routineCredentials.includes(credential))notes.push(credential);
+  const notes=(state.connected?checks:[]).filter(check=>['fail','warn'].includes(check.status)).map(check=>check.detail||check.title);
+  if(state.obs_connection_error)notes.unshift(noticeText('connection',state.obs_connection_error));
+  const credential=noticeText('credential',state.credential_status);
+  const routineCredentials=['reconnected','session','saved'];
+  if(state.connected&&credential&&!routineCredentials.includes(state.credential_status?.code))notes.push(credential);
+  if(!state.connected&&state.obs_retry_seconds!=null)notes.push(message('connection.retry',{seconds:state.obs_retry_seconds}));
   const tooltip=[...new Set(notes.filter(Boolean))].join('\n')||(report.checking?'Checking OBS…':state.connected?'Ready.':'Open OBS and check its WebSocket connection.');
-  $('connection').textContent=state.connected?(failed?'OBS · Check setup':'OBS connected'):'OBS offline';
-  $('connection').dataset.status=failed?'error':state.connected?'connected':'offline';
+  $('connection').textContent=state.connected?(failed?'OBS · Check setup':'OBS connected'):unreachable?'OBS offline':connectionCode==='credential_store'?message('connection.pill_store'):connectionCode==='password_missing'?message('connection.pill_password'):state.obs_connection_error?'OBS · Connection problem':'OBS offline';
+  $('connection').dataset.status=unreachable?'offline':failed||state.obs_connection_error?'error':state.connected?'connected':'offline';
   $('connection').removeAttribute('title');
   $('obs-tooltip').textContent=tooltip;
   $('wizard-connection').textContent=title;$('wizard-connection-detail').textContent=detail;
@@ -181,7 +185,7 @@ async function findInstallations(folder){
   try{
     const result=await action('discover_installations',folder?{folder}:{});
     discovered=result.installations;
-    $('discovery-status').textContent=discovered.length?`Found ${discovered.length} installation${discovered.length===1?'':'s'}.`:'No installations found here. Search your game folder or add one manually.';
+    $('discovery-status').textContent=discovered.length?message('discovery.found',{count:discovered.length}):'No installations found here. Search your game folder or add one manually.';
     if(result.limited)$('discovery-status').textContent+=' Search another folder if yours is missing.';
   }catch(error){$('discovery-status').textContent=error.message;}
   finally{discovering=false;renderInstallations();}

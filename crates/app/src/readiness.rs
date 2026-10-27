@@ -1,5 +1,6 @@
 //! Read-only setup observations; picture and sound still require human verification.
 use crate::config::Config;
+use owc_domain::status::{CheckStatus, ConnectionState};
 use owc_obs_client::Client;
 use serde::Serialize;
 use serde_json::json;
@@ -9,12 +10,12 @@ use std::{path::Path, process::Stdio, time::Duration};
 pub struct Check {
     id: &'static str,
     title: String,
-    status: &'static str,
+    status: CheckStatus,
     detail: String,
 }
 #[derive(Serialize)]
 pub struct Report {
-    pub connection: &'static str,
+    pub connection: ConnectionState,
     pub checks: Vec<Check>,
     pub recording_directory: Option<String>,
     pub outputs_active: bool,
@@ -25,7 +26,7 @@ impl Report {
         &mut self,
         id: &'static str,
         title: impl Into<String>,
-        status: &'static str,
+        status: CheckStatus,
         detail: impl Into<String>,
     ) {
         self.checks.push(Check {
@@ -59,14 +60,14 @@ async fn parameter(client: &Client, category: &str, name: &str) -> Option<String
 
 pub async fn inspect(config: &Config, client: Option<&Client>) -> Report {
     let mut report = Report {
-        connection: "unreachable",
+        connection: ConnectionState::Unreachable,
         checks: vec![],
         recording_directory: None,
         outputs_active: false,
         checked_at_ms: chrono::Utc::now().timestamp_millis(),
     };
     if let Some(client) = client {
-        report.connection = "connected";
+        report.connection = ConnectionState::Connected;
         if tokio::time::timeout(
             Duration::from_secs(8),
             inspect_obs(config, client, &mut report),
@@ -77,15 +78,17 @@ pub async fn inspect(config: &Config, client: Option<&Client>) -> Report {
             report.add(
                 "obs_check",
                 "OBS settings",
-                "fail",
+                CheckStatus::Fail,
                 "Settings check timed out. Check the connection and try again.",
             );
         }
     } else {
         match owc_obs_client::probe(config.obs_port).await {
-            Ok(true) => report.connection = "password_required",
-            Ok(false) => report.connection = "available",
-            Err(owc_obs_client::Error::Protocol(_)) => report.connection = "unsupported",
+            Ok(true) => report.connection = ConnectionState::PasswordRequired,
+            Ok(false) => report.connection = ConnectionState::Available,
+            Err(owc_obs_client::Error::Protocol(_)) => {
+                report.connection = ConnectionState::Unsupported;
+            }
             Err(_) => {}
         }
     }
@@ -93,20 +96,20 @@ pub async fn inspect(config: &Config, client: Option<&Client>) -> Report {
         available(&config.media.ffmpeg),
         available(&config.media.ffprobe)
     );
-    report.add("media_tools", "Media tools", if ffmpeg && ffprobe {"pass"} else {"fail"},
+    report.add("media_tools", "Media tools", if ffmpeg && ffprobe {CheckStatus::Pass} else {CheckStatus::Fail},
         if ffmpeg && ffprobe {"FFmpeg and ffprobe are available."}
         else {"FFmpeg or ffprobe is missing or did not respond. Install both, or set their paths in Setup → Media tools."});
     if config.installations.is_empty() {
         report.add(
             "logs",
             "WoW logs",
-            "warn",
+            CheckStatus::Warn,
             "No installation configured. Add a Logs directory, or choose manual clips only.",
         );
     }
     for install in &config.installations {
         let readable = std::fs::read_dir(&install.logs).is_ok();
-        report.add("logs", format!("{} logs", install.name), if readable {"pass"} else {"fail"},
+        report.add("logs", format!("{} logs", install.name), if readable {CheckStatus::Pass} else {CheckStatus::Fail},
             if readable {format!("Readable: {}. Enable /combatlog in game; detection still needs a supported activity.", install.logs.display())}
             else {format!("Cannot read {}. Check the path and folder permissions.", install.logs.display())});
     }
@@ -116,11 +119,11 @@ pub async fn inspect(config: &Config, client: Option<&Client>) -> Report {
 #[allow(clippy::too_many_lines)] // Keep the read-only onboarding observations in their displayed order.
 async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
     let Ok(version) = client.request("GetVersion", json!({})).await else {
-        report.connection = "unreachable";
+        report.connection = ConnectionState::Unreachable;
         report.add(
             "connection",
             "OBS connection",
-            "fail",
+            CheckStatus::Fail,
             "OBS stopped responding. Reconnect and check again.",
         );
         return;
@@ -128,7 +131,7 @@ async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
     report.add(
         "connection",
         "OBS connection",
-        "pass",
+        CheckStatus::Pass,
         format!(
             "OBS {} · WebSocket {}",
             version["obsVersion"].as_str().unwrap_or("unknown"),
@@ -151,13 +154,13 @@ async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
             report.add(
                 "outputs",
                 "OBS outputs",
-                "warn",
+                CheckStatus::Warn,
                 "Could not confirm idle outputs. Directory changes are unavailable until checked.",
             );
         }
     }
     if report.outputs_active {
-        report.add("outputs", "OBS is already in use", "warn", "Recording, streaming or replay buffer is active. Setup checks do not change it. An existing recording stays observe-only.");
+        report.add("outputs", "OBS is already in use", CheckStatus::Warn, "Recording, streaming or replay buffer is active. Setup checks do not change it. An existing recording stays observe-only.");
     }
     match client.request("GetRecordDirectory", json!({})).await {
         Ok(value) => {
@@ -168,14 +171,14 @@ async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
                 .and_then(|p| Path::new(p).canonicalize().ok())
                 .zip(config.spool.canonicalize().ok())
                 .is_some_and(|(a, b)| a == b);
-            report.add("directory", "Recording folder", if matches {"pass"} else if recording {"warn"} else {"fail"},
+            report.add("directory", "Recording folder", if matches {CheckStatus::Pass} else if recording {CheckStatus::Warn} else {CheckStatus::Fail},
                 if matches {"OBS uses the companion spool. Verify both apps can write/read this folder."}
                 else {"OBS uses another recording folder. Apply the companion spool while outputs are stopped, or observe an existing recording."});
         }
         Err(_) => report.add(
             "directory",
             "Recording folder",
-            "fail",
+            CheckStatus::Fail,
             "OBS did not provide its recording folder.",
         ),
     }
@@ -193,7 +196,7 @@ async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
             .is_some_and(|v| v.eq_ignore_ascii_case("true") || v == "1")
         && split_type.as_deref() == Some("Manual")
         && rec_type.as_deref() == Some("Standard");
-    report.add("splitting", "Save clips while you keep playing", if splitting {"pass"} else {"warn"},
+    report.add("splitting", "Save clips while you keep playing", if splitting {CheckStatus::Pass} else {CheckStatus::Warn},
         if splitting {"OBS can split recordings into short files for live review and automatic cleanup."}
         else {"In OBS: 1. Open Settings → Output. 2. Set Output Mode to Advanced. 3. Open Recording and choose Standard. 4. Enable Automatic File Splitting and choose Only split manually. 5. Click Apply, then Check settings again here. Without this, clips may wait until you stop recording."});
     match client.request("GetCurrentProgramScene", json!({})).await {
@@ -209,14 +212,14 @@ async fn inspect_obs(config: &Config, client: &Client, report: &mut Report) {
                 .as_ref()
                 .and_then(|v| v["sceneItems"].as_array())
                 .is_some_and(|items| items.iter().any(|v| v["sceneItemEnabled"] == true));
-            report.add("scene", "Capture scene", if enabled {"pass"} else {"warn"},
+            report.add("scene", "Capture scene", if enabled {CheckStatus::Pass} else {CheckStatus::Warn},
                 if enabled {"The active scene has enabled sources. Check the OBS preview yourself: sources can still be black or show the wrong window."}
                 else {"In OBS, click + under Sources and add Game Capture (Windows) or a window/screen capture (Linux). Select WoW, confirm it appears in the preview, then click Check settings again here."});
         }
         Err(_) => report.add(
             "scene",
             "Capture scene",
-            "warn",
+            CheckStatus::Warn,
             "Could not inspect the active scene. Verify the scene and sources in OBS.",
         ),
     }
@@ -233,18 +236,18 @@ mod tests {
         config.media.ffmpeg = root.path().join("missing-ffmpeg");
         config.media.ffprobe = root.path().join("missing-ffprobe");
         let report = inspect(&config, None).await;
-        assert_eq!(report.connection, "unreachable");
+        assert_eq!(report.connection, ConnectionState::Unreachable);
         assert!(
             report
                 .checks
                 .iter()
-                .any(|c| c.id == "media_tools" && c.status == "fail")
+                .any(|c| c.id == "media_tools" && c.status == CheckStatus::Fail)
         );
         assert!(
             report
                 .checks
                 .iter()
-                .any(|c| c.id == "logs" && c.status == "warn")
+                .any(|c| c.id == "logs" && c.status == CheckStatus::Warn)
         );
         assert!(report.recording_directory.is_none());
     }

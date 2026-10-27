@@ -5,17 +5,22 @@ function elapsedLabel(seconds){
   const parts=[];
   for(const [size,unit] of [[86400,'d'],[3600,'h'],[60,'m'],[1,'s']]){
     const value=Math.floor(remaining/size);remaining%=size;
-    if(value)parts.push(`${value}${unit}`);
+    if(value)parts.push(message('duration.'+unit,{count:value}));
     if(parts.length===2)break;
   }
-  return parts.join(' ')||'0s';
+  return parts.join(' ')||message('duration.s',{count:0});
 }
 function watcherDescription(log){
   const now=Date.now(),last=log.active?(log.last_activity_ms??log.last_event_ms):log.last_event_ms,age=last==null?null:Math.max(0,Math.floor((now-last)/1000));
-  const ageText=age===null?'No log events yet':`${log.active?'Last run activity':'Last log event'} ${elapsedLabel(age)} ago`;
-  if(log.dungeon_exit_ms!=null)return `${ageText} · Left dungeon; abandoning in ${elapsedLabel(Math.max(0,Math.ceil((log.dungeon_exit_ms+60000-now)/1000)))}`;
-  if(log.active&&age!==null&&age>=60)return `${ageText} · No exit or completion detected; inactivity timeout in ${elapsedLabel(Math.max(0,(log.inactivity_deadline_ms-now)/1000))}`;
+  const ageText=age===null?message('watcher.empty'):message(log.active?'watcher.activity':'watcher.event',{age:elapsedLabel(age)});
+  if(log.dungeon_exit_ms!=null)return message('watcher.left',{status:ageText,remaining:elapsedLabel(Math.max(0,Math.ceil((log.dungeon_exit_ms+60000-now)/1000)))});
+  if(log.active&&age!==null&&age>=60)return message('watcher.inactive',{status:ageText,remaining:elapsedLabel(Math.max(0,(log.inactivity_deadline_ms-now)/1000))});
   return ageText;
+}
+function eventText(entry){
+  if(entry.detail?.kind==='connection')return noticeText('connection',entry.detail.notice);
+  if(entry.detail?.kind==='media')return progressText(entry.detail.progress);
+  return entry.message||'';
 }
 function renderDiagnostics(){
   const logs=(state.log_status||[]).filter(log=>log.name!=='manual');
@@ -26,11 +31,11 @@ function renderDiagnostics(){
   $('watcher-status').replaceChildren();
   for(const log of logs){const row=document.createElement('p');row.textContent=`${log.name}: ${watcherDescription(log)}`;row.title=log.log_file||'';$('watcher-status').append(row);}
   $('event-log-error').hidden=!state.event_log_error;$('event-log-error').textContent=state.event_log_error||'';
-  const query=$('event-search').value.toLowerCase(),entries=(state.event_log||[]).filter(entry=>`${entry.source} ${entry.level} ${entry.message}`.toLowerCase().includes(query));
+  const query=$('event-search').value.toLowerCase(),entries=(state.event_log||[]).filter(entry=>`${entry.source} ${entry.level} ${eventText(entry)}`.toLowerCase().includes(query));
   const key=JSON.stringify(entries);if(key===eventRowsKey)return;eventRowsKey=key;
   const scroll=$('event-scroll'),top=scroll.scrollTop;
   $('event-rows').replaceChildren();
-  for(const entry of entries){const row=document.createElement('tr');row.className=entry.level==='warning'?'event-warning':'';for(const value of [new Date(entry.at_ms).toLocaleString(),entry.source,entry.message]){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}$('event-rows').append(row);}
+  for(const entry of entries){const row=document.createElement('tr');row.className=entry.level==='warning'?'event-warning':'';for(const value of [new Date(entry.at_ms).toLocaleString(),entry.source,eventText(entry)]){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}$('event-rows').append(row);}
   if(!entries.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=3;cell.textContent=query?'No matching events':'No events recorded yet';row.append(cell);$('event-rows').append(row);}
   scroll.scrollTop=$('event-follow').checked?scroll.scrollHeight:top;
 }
@@ -50,6 +55,8 @@ function sizeEventsDock(){
 function toggleEvents(open){
   $('events-dialog').hidden=!open;$('events-divider').hidden=!open;
   $('open-events').setAttribute('aria-expanded',String(open));
+  const label=message(open?'events.hide':'events.show');
+  $('open-events').setAttribute('aria-label',label);$('open-events').title=label;
   sizeEventsDock();eventRowsKey='';renderDiagnostics();
 }
 $('open-events').onclick=()=>toggleEvents($('events-dialog').hidden);

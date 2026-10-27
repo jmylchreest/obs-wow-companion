@@ -13,6 +13,18 @@ pub struct Entry {
     pub source: String,
     pub level: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<Detail>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Detail {
+    Connection {
+        notice: owc_domain::status::Notice<owc_domain::status::ConnectionCode>,
+    },
+    Media {
+        progress: owc_domain::status::Progress,
+    },
 }
 pub struct EventLog {
     pub entries: VecDeque<Entry>,
@@ -49,7 +61,17 @@ impl EventLog {
         }
     }
     pub fn push(&mut self, source: &str, level: &str, message: &str) {
+        self.push_detail(source, level, message, None);
+    }
+    pub fn push_detail(
+        &mut self,
+        source: &str,
+        level: &str,
+        message: &str,
+        detail: Option<Detail>,
+    ) {
         let entry = Entry {
+            detail,
             at_ms: chrono::Utc::now().timestamp_millis(),
             source: source.chars().take(100).collect(),
             level: level.into(),

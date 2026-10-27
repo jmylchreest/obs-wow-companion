@@ -1,8 +1,14 @@
 use crate::config::Config;
+use owc_domain::status::{AssetStatus, MediaStage, Progress};
+#[path = "engine_recovery.rs"]
+mod recovery_engine;
 use crate::events::{CaptureEvent, EventBus};
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use owc_capture::{Guard, Ownership};
+use owc_domain::status::{
+    ConnectionCode, CredentialCode, Notice, ProcessingStage, RecordingStatus,
+};
 use owc_domain::{Activity, Coverage, Kind, Outcome, Segment, plan_clip};
 use owc_library::Library;
 use owc_media::CutMode;
@@ -71,11 +77,14 @@ impl RecordingCheckpoint {
 struct ExportJob {
     id: String,
     started: Instant,
-    progress: watch::Receiver<String>,
+    progress: watch::Receiver<Progress>,
     cancel: watch::Sender<bool>,
 }
 #[allow(clippy::struct_excessive_bools)] // Independent job/capability flags; ownership is a separate state machine.
 pub struct Engine {
+    recovery: crate::recovery::Recovery,
+    recovery_checked: bool,
+    recovery_confirmed: bool,
     root: PathBuf,
     db: Library,
     config: Config,
@@ -87,7 +96,8 @@ pub struct Engine {
     last_setup_check: Instant,
     setup_completed: bool,
     credential_scope: String,
-    credential_status: String,
+    credential_status: Option<Notice<CredentialCode>>,
+    obs_connection_error: Option<Notice<ConnectionCode>>,
     session_password: Option<String>,
     last_reconnect: Instant,
     reconnect_delay: Duration,
@@ -105,8 +115,8 @@ pub struct Engine {
     share_running: bool,
     share_cancel: Option<watch::Sender<bool>>,
     share_status: Value,
-    share_progress: Option<watch::Receiver<String>>,
-    preview_progress: Option<watch::Receiver<String>>,
+    share_progress: Option<watch::Receiver<Progress>>,
+    preview_progress: Option<watch::Receiver<Progress>>,
     last_media_log: Instant,
     preview_status: Value,
     message: String,
@@ -156,14 +166,7 @@ impl Engine {
             .unwrap_or_default();
         Self::recover_manual(&mut db, &mut logs)?;
         db.set_setting("config", &serde_json::to_value(&config)?)?;
-        for installation in &config.installations {
-            let key = installation.id.to_string();
-            if !logs.contains_key(&key)
-                && let Some(state) = logs.remove(&installation.name)
-            {
-                logs.insert(key, state);
-            }
-        }
+        Self::migrate_log_keys(&config, &mut logs);
         std::fs::create_dir_all(&config.spool)?;
         std::fs::create_dir_all(&config.library)?;
         std::fs::create_dir_all(root.join("preview"))?;
@@ -181,7 +184,11 @@ impl Engine {
             .setting("automatic_paused")?
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
+        let recovery = Self::load_recovery(&db)?;
         Ok(Self {
+            recovery_checked: recovery.is_running(),
+            recovery,
+            recovery_confirmed: false,
             bus,
             bus_events,
             obs_generation: 0,
@@ -199,7 +206,8 @@ impl Engine {
             log_watchers: vec![],
             last_log_event: None,
             credential_scope,
-            credential_status: String::new(),
+            credential_status: None,
+            obs_connection_error: None,
             session_password: None,
             last_reconnect: Instant::now(),
             reconnect_delay: Duration::from_secs(2),
@@ -262,6 +270,11 @@ impl Engine {
         let segments = self.db.segments()?;
         let mut activities = self.db.list()?;
         for activity in &mut activities {
+            activity["recovery"] = serde_json::to_value(
+                self.recovery
+                    .records
+                    .get(activity["id"].as_str().unwrap_or_default()),
+            )?;
             activity["processing"] = self.processing_status(activity, &segments);
             activity["review_available"] = json!(
                 matches!(activity["status"].as_str(), Some("pending" | "exporting"))
@@ -272,12 +285,13 @@ impl Engine {
                         .is_some())
             );
         }
+        let log_status = self.logs.iter().map(|(name,s)|json!({"installation_id":name,"name":s.detector.installation,"last_event_ms":s.detector.last_event_ms,"log_file":s.last_source,"active":s.detector.active.is_some(),"dungeon_exit_ms":s.detector.dungeon_exit_ms,"last_activity_ms":s.detector.inactivity_since(),"inactivity_deadline_ms":s.detector.inactivity_since().map(|last|last+i64::from(self.config.activity_timeout_minutes)*60_000)})).collect::<Vec<_>>();
         Ok(
             json!({"shutting_down":self.shutting_down,"shutdown_ready":self.shutting_down && !self.export_running && !self.share_running && !self.guard.stop_pending && !self.stop_when_started,"config":self.config,"connected":self.obs.is_some(),"ownership":self.guard.ownership,"armed":self.armed,"automatic_paused":self.automatic_paused,"recording_activity_ids":self.automatic_activities,"split_supported":self.split_supported,
-   "setup":self.setup,"setup_completed":self.setup_completed,"credential_status":self.credential_status,
+   "obs_retry_seconds":self.obs.is_none().then(|| self.reconnect_delay.saturating_sub(self.last_reconnect.elapsed()).as_secs().saturating_add(1)),"automatic_status":self.automatic_status(),"recovery":self.recovery,"setup":self.setup,"setup_completed":self.setup_completed,"credential_status":self.credential_status,"obs_connection_error":self.obs_connection_error,
    "event_log":self.event_log.entries,"event_log_error":self.event_log.error,"last_log_event":self.last_log_event,"message":self.message,"log_errors":self.log_errors,"export_running":self.export_running,"recording_open":self.recording.is_some(),"preview":self.preview_status,"autostart":crate::autostart::enabled(),"obs_stats":self.obs_stats,
    "share_running":self.share_running,"share":self.share_status,"share_progress":self.share_progress.as_ref().map(|p|p.borrow().clone()),"share_directory":self.root.join("exports"),"activities":activities,"active":self.logs.values().filter_map(|s|s.detector.active.clone()).collect::<Vec<_>>(),
-   "log_status":self.logs.iter().map(|(name,s)|json!({"installation_id":name,"name":s.detector.installation,"last_event_ms":s.detector.last_event_ms,"log_file":s.last_source,"active":s.detector.active.is_some(),"dungeon_exit_ms":s.detector.dungeon_exit_ms,"last_activity_ms":s.detector.inactivity_since(),"inactivity_deadline_ms":s.detector.inactivity_since().map(|last|last+i64::from(self.config.activity_timeout_minutes)*60_000)})).collect::<Vec<_>>(),
+   "log_status":log_status,
    "segments":segments.len()}),
         )
     }
@@ -343,32 +357,32 @@ impl Engine {
         if let Some(job) = &self.export_job
             && activity["id"] == job.id
         {
-            return json!({"stage":if *job.cancel.borrow() {"cancelling"} else {"exporting"}, "title":if *job.cancel.borrow() {"Cancelling clip preparation"} else {"Saving clip"}, "detail":job.progress.borrow().clone(), "elapsed_seconds":job.started.elapsed().as_secs()});
+            return json!({"stage":if *job.cancel.borrow() {ProcessingStage::Cancelling} else {ProcessingStage::Exporting}, "progress":job.progress.borrow().clone(), "elapsed_seconds":job.started.elapsed().as_secs()});
         }
         let needed =
             activity["end_ms"].as_i64().unwrap_or(0) + i64::from(self.config.post_seconds) * 1000;
         let remaining = needed.saturating_sub(Self::now());
         if remaining > 0 {
-            return json!({"stage":"post_roll", "title":"Post-roll", "detail":format!("Saving the last {} seconds after the encounter.", (remaining + 999) / 1000)});
+            return json!({"stage":ProcessingStage::PostRoll, "remaining_seconds":(remaining + 999) / 1000});
         }
         if let Some(recording) = &self.recording
             && segments.iter().map(|s| s.end_ms).max().unwrap_or(0) < needed
         {
             if self.obs.is_none() {
-                return json!({"stage":"reconnecting", "title":"Waiting for OBS", "detail":"Reconnecting to OBS before checking the remaining footage."});
+                return json!({"stage":ProcessingStage::Reconnecting});
             }
             if self.guard.ownership != Ownership::Managed {
-                return json!({"stage":"observed_source", "title":"Waiting for OBS", "detail":"OBS is still recording. The companion does not own this recording and cannot stop it automatically. Stop recording in OBS so the remaining footage can be checked."});
+                return json!({"stage":ProcessingStage::ObservedSource});
             }
             if recording.invalid {
-                return json!({"stage":"uncertain_source", "title":"Check OBS recording", "detail":"Recording timing was interrupted. Stop recording in OBS so the remaining footage can be checked."});
+                return json!({"stage":ProcessingStage::UncertainSource});
             }
-            return json!({"stage":"source_open", "title":"Waiting for OBS to finish saving", "detail":"OBS is still writing the last part of this recording. Clip preparation starts when that file is finished."});
+            return json!({"stage":ProcessingStage::SourceOpen});
         }
         if self.export_running {
-            json!({"stage":"queued", "title":"Queued", "detail":"Waiting for the current clip to finish saving."})
+            json!({"stage":ProcessingStage::Queued})
         } else {
-            json!({"stage":"preparing", "title":"Preparing clip", "detail":"Checking the recorded footage before saving this clip."})
+            json!({"stage":ProcessingStage::Preparing})
         }
     }
     fn start_setup_check(&mut self) {
@@ -399,7 +413,7 @@ impl Engine {
         let mut tick = tokio::time::interval(Duration::from_millis(250));
         loop {
             let reply = tokio::select! {
-             req=rx.recv()=>{let Some(req)=req else{break};let result=self.command(req.data).await;if let Err(e)=&result{self.message=format!("{e:#}");}Some((req.reply,result))},
+             req=rx.recv()=>{let Some(req)=req else{break};let connecting=req.data["action"]=="connect";let supplied=req.data["password"].as_str().unwrap_or_default().to_owned();let result=self.command(req.data).await;if let Err(e)=&result{if connecting{self.connection_failed(ConnectionCode::ConnectFailed,format!("{e:#}"),&supplied);}self.message=if connecting{self.obs_connection_error.as_ref().and_then(|n|n.diagnostic.clone()).unwrap_or_default()}else{format!("{e:#}")};}Some((req.reply,result))},
              event=self.bus_events.recv()=>{if let Some(event)=event && let Err(error)=self.capture_event(event).await { self.message=error.to_string(); } None},
              _=tick.tick()=>{if let Err(e)=self.tick().await{self.message=format!("{e:#}");tracing::warn!(error=%e,"engine tick");}None}
             };
@@ -422,26 +436,33 @@ impl Engine {
             }
             if self.last_media_log.elapsed() >= Duration::from_secs(5) {
                 if let Some(job) = &self.export_job {
-                    self.event_log.push(
+                    self.event_log.push_detail(
                         "FFmpeg",
                         "info",
-                        &format!(
-                            "Export {}: {} ({}s elapsed)",
-                            job.id,
-                            job.progress.borrow().as_str(),
-                            job.started.elapsed().as_secs()
-                        ),
+                        &job.progress.borrow().to_string(),
+                        Some(crate::event_log::Detail::Media {
+                            progress: job.progress.borrow().clone(),
+                        }),
                     );
                 }
                 if let Some(progress) = &self.share_progress {
-                    self.event_log
-                        .push("Export", "info", progress.borrow().as_str());
+                    self.event_log.push_detail(
+                        "Export",
+                        "info",
+                        &progress.borrow().to_string(),
+                        Some(crate::event_log::Detail::Media {
+                            progress: progress.borrow().clone(),
+                        }),
+                    );
                 }
                 if let Some(progress) = &self.preview_progress {
-                    self.event_log.push(
+                    self.event_log.push_detail(
                         "FFmpeg",
                         "info",
-                        &format!("Playback: {}", progress.borrow().as_str()),
+                        &progress.borrow().to_string(),
+                        Some(crate::event_log::Detail::Media {
+                            progress: progress.borrow().clone(),
+                        }),
                     );
                 }
                 self.last_media_log = Instant::now();
@@ -1024,12 +1045,59 @@ impl Engine {
         }
         Ok(())
     }
+    fn migrate_log_keys(config: &Config, logs: &mut BTreeMap<String, LogState>) {
+        for installation in &config.installations {
+            let key = installation.id.to_string();
+            if !logs.contains_key(&key)
+                && let Some(state) = logs.remove(&installation.name)
+            {
+                logs.insert(key, state);
+            }
+        }
+    }
+
+    fn connection_failed(&mut self, code: ConnectionCode, message: String, supplied: &str) {
+        let mut message = message;
+        for password in [Some(supplied), self.session_password.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if !password.is_empty() {
+                message = message.replace(password, "[redacted]");
+            }
+        }
+        let notice = Notice::diagnostic(code, message.clone());
+        if self.obs_connection_error.as_ref() != Some(&notice) {
+            self.event_log.push_detail(
+                "OBS",
+                "warning",
+                &message,
+                Some(crate::event_log::Detail::Connection {
+                    notice: notice.clone(),
+                }),
+            );
+            tracing::warn!(error = %message, "OBS connection failed");
+        }
+        self.obs_connection_error = Some(notice);
+    }
+
     async fn reconnect(&mut self) {
         self.last_reconnect = Instant::now();
         self.reconnect_delay = (self.reconnect_delay * 2).min(Duration::from_secs(30));
-        let Ok(authentication_required) = owc_obs_client::probe(self.config.obs_port).await else {
-            self.message = "Waiting for OBS. Reconnecting automatically.".into();
-            return;
+        let authentication_required = match owc_obs_client::probe(self.config.obs_port).await {
+            Ok(required) => required,
+            Err(error) => {
+                if self
+                    .credential_status
+                    .as_ref()
+                    .is_some_and(|notice| notice.code == CredentialCode::StoreFailed)
+                {
+                    self.credential_status = None;
+                }
+                self.connection_failed(ConnectionCode::Unreachable, format!("Cannot reach OBS on port {}: {error:#}. Check that OBS and its WebSocket server are running.", self.config.obs_port), "");
+                self.message = "Waiting for OBS. Reconnecting automatically.".into();
+                return;
+            }
         };
         let password = if let Some(password) = &self.session_password {
             password.clone()
@@ -1039,29 +1107,43 @@ impl Engine {
             {
                 Ok(Some(password)) => password,
                 Ok(None) => {
-                    self.credential_status.clear();
+                    self.connection_failed(ConnectionCode::PasswordMissing, "OBS requires a password, but no saved password was found. Enter it in setup.".into(), "");
                     return;
                 }
                 Err(error) => {
-                    self.credential_status = error.to_string();
+                    self.credential_status = Some(Notice::diagnostic(
+                        CredentialCode::StoreFailed,
+                        error.to_string(),
+                    ));
+                    self.connection_failed(
+                        ConnectionCode::CredentialStore,
+                        format!("Cannot read the saved OBS password: {error:#}"),
+                        "",
+                    );
                     return;
                 }
             }
         } else {
             String::new()
         };
-        if self
+        match self
             .command(json!({"action":"connect","password":password}))
             .await
-            .is_ok()
         {
-            self.credential_status = "Reconnected to OBS.".into();
-        } else {
-            self.credential_status =
-                "Could not reconnect. Check the OBS password in connection settings.".into();
+            Ok(_) => {
+                self.credential_status = Some(Notice::new(CredentialCode::Reconnected));
+            }
+            Err(error) => {
+                self.connection_failed(
+                    ConnectionCode::ConnectFailed,
+                    format!("{error:#}"),
+                    &password,
+                );
+            }
         }
     }
     async fn refresh_recording_checkpoint(&mut self) -> Result<()> {
+        self.persist_source_anchor()?;
         if self.guard.can_mutate() && !self.guard.split_pending {
             let state = self.obs_request("GetRecordStatus", json!({})).await?;
             self.checkpoint_recording(&state).await?;
@@ -1377,6 +1459,7 @@ impl Engine {
                 let bus = self.bus.clone();
                 self.obs_watcher = Some(bus.watch_obs(events, generation));
                 self.obs = Some(client);
+                self.obs_connection_error = None;
                 self.start_setup_check();
                 self.message = if recovered {
                     "Reconnected to the companion recording."
@@ -1392,19 +1475,30 @@ impl Engine {
                     )
                     .await
                     {
-                        Ok(()) => "Password saved in your system password store.".into(),
-                        Err(error) => error.to_string(),
+                        Ok(()) => Some(Notice::new(CredentialCode::Saved)),
+                        Err(error) => Some(Notice::diagnostic(
+                            CredentialCode::StoreFailed,
+                            error.to_string(),
+                        )),
                     }
                 } else {
-                    "Connected for this session.".into()
+                    Some(Notice::new(CredentialCode::Session))
                 };
+            }
+            "recover_sources" => {
+                self.recovery_confirmed = v["confirm_closed"] == true;
+                self.begin_source_recovery()?;
+            }
+            "delete_recovery_file" => {
+                let path = PathBuf::from(v["path"].as_str().context("source path")?);
+                self.delete_recovery_file(&path, v["confirm_closed"] == true)
+                    .await?;
             }
             "forget_password" => {
                 self.session_password = None;
                 crate::credentials::forget(self.credential_scope.clone(), self.config.obs_port)
                     .await?;
-                self.credential_status =
-                    "Saved password removed. Your current connection stays open.".into();
+                self.credential_status = Some(Notice::new(CredentialCode::Removed));
             }
             "configure_output" => {
                 let client = self.obs.as_ref().context("connect to OBS first")?;
@@ -1474,7 +1568,7 @@ impl Engine {
                     self.obs = None;
                     self.obs_generation += 1;
                     self.guard = Guard::default();
-                    self.credential_status.clear();
+                    self.credential_status = None;
                     self.session_password = None;
                     self.scene_restore = None;
                     self.reconnect_delay = Duration::from_secs(2);
@@ -1631,11 +1725,11 @@ impl Engine {
                         let dest = self.root.join("preview").join(&filename);
                         let mut media = self.config.media.clone();
                         let (progress, receiver) =
-                            watch::channel("Preparing retained footage".to_owned());
+                            watch::channel(Progress::new(MediaStage::Preparing));
                         media.progress = Some(progress);
                         self.preview_progress = Some(receiver);
                         self.preview_running = true;
-                        self.preview_status = json!({"status":"generating","key":key,"track":track,"early":true,"origin_ms":plan.actual_start_ms});
+                        self.preview_status = json!({"status":AssetStatus::Generating,"key":key,"track":track,"early":true,"origin_ms":plan.actual_start_ms});
                         self.event_log.push(
                             "FFmpeg",
                             "info",
@@ -1687,20 +1781,20 @@ impl Engine {
                         "transcode"
                     };
                 if v["direct"] == true && track == 0 {
-                    self.preview_status = json!({"status":"ready","url":format!("/media/{key}"),"origin_ms":origin,"key":key,"duration_ms":source_duration_ms,"track":track,"direct":true,"source":source_info,"mode":"original"});
+                    self.preview_status = json!({"status":AssetStatus::Ready,"url":format!("/media/{key}"),"origin_ms":origin,"key":key,"duration_ms":source_duration_ms,"track":track,"direct":true,"source":source_info,"mode":"original"});
                     return Ok(json!({}));
                 }
                 let filename = format!("{key}-track-{track}.mp4");
                 let dest = self.root.join("preview").join(&filename);
                 let mut media = self.config.media.clone();
-                let (progress, receiver) = watch::channel("Preparing playback".to_owned());
+                let (progress, receiver) = watch::channel(Progress::new(MediaStage::Playback));
                 media.progress = Some(progress);
                 self.preview_progress = Some(receiver);
                 self.event_log
                     .push("FFmpeg", "info", "Preparing playback copy");
                 let tx = self.tx.clone();
                 self.preview_running = true;
-                self.preview_status = json!({"status":"generating","origin_ms":origin,"key":key,"track":track,"source":source_info,"mode":conversion,"reason":reason});
+                self.preview_status = json!({"status":AssetStatus::Generating,"origin_ms":origin,"key":key,"track":track,"source":source_info,"mode":conversion,"reason":reason});
                 tokio::spawn(async move {
                     let result = media.preview(&source, &dest, track).await;
                     let data = match result {
@@ -1732,9 +1826,9 @@ impl Engine {
                     },
                 );
                 self.preview_status = if v["error"].is_string() {
-                    json!({"status":"failed","track":v["track"],"error":v["error"],"key":v["key"],"source":v["source"],"mode":v["mode"],"reason":v["reason"]})
+                    json!({"status":AssetStatus::Failed,"track":v["track"],"error":v["error"],"key":v["key"],"source":v["source"],"mode":v["mode"],"reason":v["reason"]})
                 } else {
-                    json!({"status":"ready","track":v["track"],"early":v["early"],"url":format!("/preview/{}",v["file"].as_str().unwrap_or_default()),"origin_ms":v["origin_ms"],"key":v["key"],"duration_ms":v["duration_ms"],"source":v["source"],"mode":v["mode"],"reason":v["reason"]})
+                    json!({"status":AssetStatus::Ready,"track":v["track"],"early":v["early"],"url":format!("/preview/{}",v["file"].as_str().unwrap_or_default()),"origin_ms":v["origin_ms"],"key":v["key"],"duration_ms":v["duration_ms"],"source":v["source"],"mode":v["mode"],"reason":v["reason"]})
                 };
             }
             "share_export" => self.start_share(&v)?,
@@ -1755,9 +1849,9 @@ impl Engine {
                     )?;
                 }
                 self.share_status = if v["error"].is_string() {
-                    json!({"status":if v["cancelled"] == true { "cancelled" } else { "failed" },"error":v["error"]})
+                    json!({"status":if v["cancelled"] == true { AssetStatus::Cancelled } else { AssetStatus::Failed },"error":v["error"]})
                 } else {
-                    json!({"status":"ready","id":v["id"],"path":v["details"]["path"]})
+                    json!({"status":AssetStatus::Ready,"id":v["id"],"path":v["details"]["path"]})
                 };
                 self.event_log.push(
                     "Export",
@@ -1843,7 +1937,7 @@ impl Engine {
                 self.export_job = None;
                 let id = v["id"].as_str().context("id")?;
                 if let Some(error) = v["error"].as_str() {
-                    self.db.fail(id, "failed", error)?;
+                    self.db.fail(id, RecordingStatus::Failed, error)?;
                     if self.shutting_down {
                         self.db.retry(id)?;
                     }
@@ -1904,11 +1998,11 @@ impl Engine {
             tags: serde_json::from_value(record["tags"].clone()).unwrap_or_default(),
             destination: PathBuf::from(v["path"].as_str().context("Choose a ZIP destination")?),
         };
-        let (progress, receiver) = watch::channel("Preparing sharing bundle".to_owned());
+        let (progress, receiver) = watch::channel(Progress::new(MediaStage::Bundle));
         self.share_running = true;
         self.share_cancel = Some(cancel.clone());
         self.share_progress = Some(receiver);
-        self.share_status = json!({"status":"generating","id":id});
+        self.share_status = json!({"status":AssetStatus::Generating,"id":id});
         let media = self.config.media.clone();
         let tx = self.tx.clone();
         let id = id.to_owned();
@@ -1963,7 +2057,7 @@ impl Engine {
             .begin_export(&plan, &dest, matches!(mode, CutMode::Precise))?;
         self.export_running = true;
         let mut media = self.config.media.clone();
-        let (progress, updates) = watch::channel("Preparing footage".to_owned());
+        let (progress, updates) = watch::channel(Progress::new(MediaStage::Preparing));
         media.progress = Some(progress);
         let (cancel, cancelled) = watch::channel(false);
         media.cancel = Some(cancelled);
@@ -2031,6 +2125,8 @@ impl Engine {
         Ok(())
     }
     fn disconnected(&mut self) {
+        // Preserve the last trusted anchor; reconnect loss does not prove a pause.
+        let _ = self.persist_source_anchor();
         self.stop_when_started = false;
         self.interrupted_activities
             .extend(self.automatic_activities.drain());
@@ -2054,7 +2150,8 @@ impl Engine {
     #[allow(clippy::too_many_lines)] // OBS event transitions stay together to make ownership invalidation auditable.
     async fn event(&mut self, event: Event) -> Result<()> {
         match event {
-            Event::Disconnected(_reason) => {
+            Event::Disconnected(reason) => {
+                self.connection_failed(ConnectionCode::Disconnected, reason, "");
                 self.disconnected();
             }
             Event::Obs {
@@ -2130,6 +2227,7 @@ impl Engine {
                         if let Some(r) = &mut self.recording {
                             r.invalid = true;
                         }
+                        self.persist_source_anchor()?;
                         self.message =
                             "OBS pause/resume changed timing; capture is now observe-only.".into();
                     }
@@ -2260,8 +2358,8 @@ impl Engine {
                         }
                     }
                     Err(e) => {
-                        self.guard.lose_ownership();
-                        self.message = format!("OBS status unavailable: {e}");
+                        self.connection_failed(ConnectionCode::StatusFailed, format!("{e:#}"), "");
+                        self.disconnected();
                     }
                 }
             }
@@ -2278,11 +2376,22 @@ impl Engine {
                     tracing::warn!(%id, %error, "sidecar reconciliation pending");
                 }
             }
+            self.source_recovery_tick().await?;
             self.cleanup().await?;
         }
         if !self.export_running {
-            let segments = self.db.segments()?;
+            let segments = self
+                .db
+                .segments()?
+                .into_iter()
+                .filter(|segment| segment.path.is_file())
+                .collect::<Vec<_>>();
             for mut a in self.db.pending()? {
+                if !self.recovery.pending.is_empty()
+                    && self.recovery.affected.contains(&a.id.to_string())
+                {
+                    continue;
+                }
                 if let Some((plan, precise)) = self.db.export_plan(&a.id.to_string())? {
                     self.start_export(
                         a,
@@ -2314,7 +2423,7 @@ impl Engine {
                 if matches!(plan.coverage, Coverage::Gapped | Coverage::Unavailable) {
                     self.db.fail(
                         &a.id.to_string(),
-                        "unavailable",
+                        RecordingStatus::Unavailable,
                         "Source timeline has gaps or no retained footage",
                     )?;
                     continue;
@@ -2351,12 +2460,11 @@ impl Engine {
             history.min(s - i64::from(self.config.pre_seconds) * 1000)
         });
         let spool = self.config.spool.canonicalize()?;
-        let mut bytes = 0_u64;
         for s in self.db.segments()? {
-            let Ok(meta) = std::fs::metadata(&s.path) else {
+            let Ok(_) = std::fs::metadata(&s.path) else {
                 continue;
             };
-            if s.managed {
+            if s.managed && !self.recovery.is_running() {
                 let canonical = s.path.canonicalize()?;
                 if canonical.parent() == Some(spool.as_path())
                     && s.end_ms < retain_from
@@ -2365,14 +2473,14 @@ impl Engine {
                 {
                     std::fs::remove_file(&canonical)?;
                     self.db.remove_segment(&s.id.to_string())?;
-                } else {
-                    bytes = bytes.saturating_add(meta.len());
                 }
             }
         }
-        if let Some(path) = self.recording.as_ref().and_then(|r| r.path.as_ref()) {
-            bytes = bytes.saturating_add(std::fs::metadata(path).map_or(0, |m| m.len()));
-        }
+        let bytes: u64 = crate::recovery::files(&spool)?
+            .iter()
+            .filter_map(|path| std::fs::metadata(path).ok())
+            .map(|meta| meta.len())
+            .sum();
         if (bytes > u64::from(self.config.spool_gib) * 1_073_741_824
             || fs2::available_space(&spool)?
                 < u64::from(self.config.minimum_free_gib) * 1_073_741_824)
@@ -2478,6 +2586,265 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn connection_failures_are_visible_redacted_and_deduplicated() {
+        let root = tempfile::tempdir().expect("root");
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().into(), tx, status).expect("engine");
+        engine.session_password = Some("secret-value".into());
+        let count = engine.event_log.entries.len();
+        engine.connection_failed(
+            ConnectionCode::ConnectFailed,
+            "Authentication failed: secret-value".into(),
+            "",
+        );
+        engine.connection_failed(
+            ConnectionCode::ConnectFailed,
+            "Authentication failed: secret-value".into(),
+            "",
+        );
+        assert_eq!(engine.event_log.entries.len(), count + 1);
+        assert_eq!(
+            engine.snapshot().expect("snapshot")["obs_connection_error"]["diagnostic"],
+            "Authentication failed: [redacted]"
+        );
+        let log = std::fs::read_to_string(root.path().join("events.jsonl")).expect("persisted log");
+        assert!(!log.contains("secret-value"));
+        engine
+            .event(Event::Disconnected("connection reset".into()))
+            .await
+            .expect("disconnect");
+        assert!(engine.obs.is_none());
+        assert!(!engine.armed);
+        assert_eq!(
+            engine.obs_connection_error.as_ref().map(|n| n.code),
+            Some(ConnectionCode::Disconnected)
+        );
+    }
+
+    #[tokio::test]
+    async fn source_recovery_is_idempotent_and_preserves_unknown_files() {
+        let root = tempfile::tempdir().expect("root");
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().into(), tx, status).expect("engine");
+        engine.config.pre_seconds = 0;
+        engine.config.post_seconds = 0;
+        let source = engine.config.spool.join("source.mkv");
+        let probe = test_video(&engine.config.media, &source)
+            .await
+            .expect("fixture");
+        let end = crate::recovery::fingerprint(&source).expect("file").1;
+        let start = end - probe.duration_ms;
+        let mut activity = Activity::new(Kind::Raid, "Recovery test".into(), start + 500, "Retail");
+        activity.finish(start + 2000, Outcome::Success);
+        engine.db.save_activity(&activity).expect("save");
+        engine
+            .db
+            .fail(
+                &activity.id.to_string(),
+                RecordingStatus::Unavailable,
+                "missing",
+            )
+            .expect("fail");
+        // Proven timing but explicitly not owned: it may be used, never deleted.
+        let anchor = crate::recovery::Anchor {
+            path: source.clone(),
+            session: Uuid::new_v4(),
+            start_ms: start,
+            managed: false,
+            invalid: false,
+        };
+        engine
+            .db
+            .set_setting("source_anchors", &json!([anchor]))
+            .expect("anchor");
+        engine.begin_source_recovery().expect("begin");
+        engine.source_recovery_tick().await.expect("wait");
+        assert!(engine.db.segments().expect("segments").is_empty());
+        engine.recovery_confirmed = true;
+        engine.source_recovery_tick().await.expect("scan");
+        engine.source_recovery_tick().await.expect("plan");
+        let segments = engine.db.segments().expect("segments");
+        assert_eq!(segments.len(), 1);
+        let plan = plan_clip(&activity, &segments, 0, 0);
+        assert_eq!(plan.coverage, Coverage::Complete);
+        let output = engine.config.library.join("recovered.mkv");
+        let exported = engine
+            .config
+            .media
+            .export(&plan, &output, CutMode::Precise)
+            .await
+            .expect("export");
+        assert!(exported.duration_ms.abs_diff(1500) < 100);
+        engine
+            .db
+            .begin_export(&plan, &output, true)
+            .expect("export plan");
+        engine
+            .db
+            .finish_export(&activity.id.to_string(), exported.audio_tracks)
+            .expect("ready");
+        engine.source_recovery_tick().await.expect("complete");
+        assert_eq!(
+            engine.recovery.stage,
+            owc_domain::status::RecoveryStage::Complete
+        );
+        engine.begin_source_recovery().expect("repeat");
+        assert!(engine.recovery.pending.is_empty());
+        engine.cleanup().await.expect("cleanup");
+        assert!(source.exists());
+        assert_eq!(engine.db.segments().expect("segments").len(), 1);
+    }
+    #[tokio::test]
+    async fn recovery_delete_requires_empty_unchanged_unreferenced_source_and_confirmation() {
+        use owc_domain::status::{RecoveryReason, RecoveryStage};
+        let root = tempfile::tempdir().expect("root");
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().into(), tx, status).expect("engine");
+        let source = engine.config.spool.join("empty.mp4");
+        std::fs::write(&source, []).expect("empty file");
+        engine.recovery.stage = RecoveryStage::NeedsAttention;
+        engine.recovery.records.insert(
+            "historical".into(),
+            crate::recovery::Record {
+                stage: RecoveryStage::Unrecoverable,
+                reason: Some(RecoveryReason::MissingSource),
+                confidence: owc_domain::status::TimingConfidence::Uncertain,
+            },
+        );
+        engine.recovery.issues.push(crate::recovery::Issue {
+            path: source.clone(),
+            reason: RecoveryReason::EmptySource,
+            fingerprint: Some(crate::recovery::fingerprint(&source).expect("fingerprint")),
+        });
+        assert!(engine.delete_recovery_file(&source, false).await.is_err());
+        assert!(source.exists());
+        std::fs::write(&source, b"new footage").expect("source changed");
+        assert!(engine.delete_recovery_file(&source, true).await.is_err());
+        assert_eq!(std::fs::read(&source).expect("retained"), b"new footage");
+        std::fs::write(&source, []).expect("empty fixture");
+        engine.recovery.issues[0].fingerprint =
+            Some(crate::recovery::fingerprint(&source).expect("fingerprint"));
+        engine.recovery.issues[0].reason = RecoveryReason::TimingUncertain;
+        assert!(engine.delete_recovery_file(&source, true).await.is_err());
+        engine.recovery.issues[0].reason = RecoveryReason::EmptySource;
+        engine.export_running = true;
+        assert!(engine.delete_recovery_file(&source, true).await.is_err());
+        engine.export_running = false;
+        let segment = Segment {
+            id: Uuid::new_v4(),
+            session: Uuid::new_v4(),
+            path: source.clone(),
+            start_ms: 1,
+            end_ms: 2,
+            closed: true,
+            managed: false,
+        };
+        engine.db.add_segment(&segment).expect("referenced source");
+        assert!(engine.delete_recovery_file(&source, true).await.is_err());
+        engine
+            .db
+            .remove_segment(&segment.id.to_string())
+            .expect("unreference fixture");
+        engine
+            .delete_recovery_file(&source, true)
+            .await
+            .expect("confirmed delete");
+        assert!(!source.exists());
+        assert!(engine.recovery.issues.is_empty());
+        assert_eq!(engine.recovery.stage, RecoveryStage::Complete);
+        assert_eq!(
+            engine.recovery.records["historical"].stage,
+            RecoveryStage::Unrecoverable
+        );
+        engine.recovery.stage = RecoveryStage::NeedsAttention;
+        engine.save_recovery().expect("old build result");
+        let restored = Engine::load_recovery(&engine.db).expect("migrate completed result");
+        assert_eq!(restored.stage, RecoveryStage::Complete);
+        assert_eq!(
+            engine
+                .db
+                .setting("source_recovery")
+                .expect("stored state")
+                .expect("state")["stage"],
+            "complete"
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_distinguishes_missing_footage_from_unverified_sources() {
+        use owc_domain::status::{RecoveryReason, RecoveryStage};
+        let root = tempfile::tempdir().expect("root");
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().into(), tx, status).expect("engine");
+        let mut activity = Activity::new(Kind::Raid, "Missing footage".into(), 1000, "Retail");
+        activity.finish(2000, Outcome::Success);
+        let id = activity.id.to_string();
+        engine.db.save_activity(&activity).expect("save");
+        engine
+            .db
+            .fail(&id, RecordingStatus::Unavailable, "missing")
+            .expect("unavailable");
+        engine.begin_source_recovery().expect("begin");
+        engine.source_recovery_tick().await.expect("wait offline");
+        assert!(engine.recovery.waiting);
+        assert_eq!(engine.recovery.records[&id].stage, RecoveryStage::Checking);
+        engine.recovery_confirmed = true;
+        engine
+            .source_recovery_tick()
+            .await
+            .expect("check empty folder");
+        assert_eq!(
+            engine.recovery.records[&id].stage,
+            RecoveryStage::Unrecoverable
+        );
+        assert_eq!(
+            engine.recovery.records[&id].reason,
+            Some(RecoveryReason::MissingSource)
+        );
+        assert_eq!(
+            engine.db.activity(&id).expect("metadata retained").name,
+            "Missing footage"
+        );
+        drop(engine);
+        let (tx, _) = mpsc::channel(32);
+        let (status, _) = watch::channel(Value::Null);
+        let mut engine = Engine::new(root.path().into(), tx, status).expect("restart");
+        assert_eq!(
+            engine.recovery.records[&id].stage,
+            RecoveryStage::Unrecoverable
+        );
+        engine
+            .source_recovery_tick()
+            .await
+            .expect("retain terminal result");
+        assert_eq!(
+            engine.recovery.records[&id].stage,
+            RecoveryStage::Unrecoverable
+        );
+        engine
+            .begin_source_recovery()
+            .expect("retry after restoring a file");
+        engine.recovery.issues.push(crate::recovery::Issue {
+            path: engine.config.spool.join("unverified.mp4"),
+            reason: RecoveryReason::TimingUncertain,
+            fingerprint: None,
+        });
+        engine.recovery_confirmed = true;
+        engine.source_recovery_tick().await.expect("uncertain");
+        assert_eq!(
+            engine.recovery.records[&id].stage,
+            RecoveryStage::NeedsAttention
+        );
+        assert_eq!(
+            engine.recovery.records[&id].reason,
+            Some(RecoveryReason::TimingUncertain)
+        );
+    }
     async fn test_video(media: &owc_media::Media, path: &Path) -> Result<owc_media::Probe> {
         let status = tokio::process::Command::new(&media.ffmpeg)
             .args([
@@ -2571,7 +2938,7 @@ mod tests {
                 .expect("plan")
                 .is_none()
         );
-        engine.preview_status = json!({"key":id,"status":"ready","origin_ms":500});
+        engine.preview_status = json!({"key":id,"status":AssetStatus::Ready,"origin_ms":500});
         assert_eq!(
             engine
                 .playback_offset(&id, Some(500), 1000)
@@ -2705,7 +3072,8 @@ mod tests {
         let (status, _) = watch::channel(Value::Null);
         let mut engine = Engine::new(root.path().into(), tx, status).expect("engine");
         engine.preview_running = true;
-        engine.preview_status = json!({"status":"generating","key":"existing","track":0});
+        engine.preview_status =
+            json!({"status":AssetStatus::Generating,"key":"existing","track":0});
         let before = engine.preview_status.clone();
         let response = engine
             .command(json!({"action":"preview","id":"other"}))

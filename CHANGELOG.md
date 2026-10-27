@@ -2,7 +2,19 @@
 
 ## Unreleased
 
+### Changed
+- Use consistent dark scrollbars throughout the app, leave room beside recording actions, and replace the events footer label with an accessible expand/collapse button.
+- Keep recovery actions beside the status heading, with a full-width progress bar below that gives way to the file review panel when finished. Remove banner dismissal and event shortcuts; empty unrecoverable files offer confirmed deletion, with cleanup policy shown per file.
+
+- Recover closed, unindexed footage using verified timing; show a recovery panel, retain retryable errors and include orphaned files in storage accounting.
+- Use typed connection, credential, recovery and encoding progress data with a shared English message catalogue and locale-aware formatting.
+- Seek near the clip start when locating keyframes in long source recordings.
+- Distinguish unrecoverable recordings from footage still awaiting recovery. Explain missing footage, preserve encounter details, and allow checking again after restoring source files.
+
 ### Fixed
+- Clear the attention banner when no unresolved file or retryable recording issues remain, including stale results saved by older builds. Keep historical unrecoverable statuses on their recordings.
+- Show OBS as offline when its WebSocket server is unreachable, suppress stale password-store warnings, and show the automatic retry countdown.
+- Retain OBS connection errors in the event log and status pill, and show automatic recording as blocked while OBS or setup is unavailable.
 - Replace the native audio-track dropdown with a compact player button and radio menu matching the marker filter.
 - Add familiar player keyboard shortcuts for playback, seeking, mute, volume, speed and fullscreen; reserve M for mute instead of recording.
 

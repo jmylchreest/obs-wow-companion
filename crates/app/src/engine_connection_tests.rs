@@ -168,6 +168,45 @@ async fn low_space_stops_only_owned_output_once_and_preserves_sources() {
 }
 
 #[tokio::test]
+async fn unreachable_obs_supersedes_old_credential_errors_and_retries() {
+    let root = tempfile::tempdir().expect("root");
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listen");
+    let port = listener.local_addr().expect("address").port();
+    drop(listener);
+    let mut engine = engine(root.path(), port);
+    engine.credential_status = Some(Notice::new(CredentialCode::StoreFailed));
+    engine.obs_connection_error = Some(Notice::new(ConnectionCode::CredentialStore));
+    engine.reconnect().await;
+    assert_eq!(
+        engine
+            .obs_connection_error
+            .as_ref()
+            .map(|notice| notice.code),
+        Some(ConnectionCode::Unreachable)
+    );
+    assert!(engine.credential_status.is_none());
+    assert!(
+        engine.snapshot().expect("snapshot")["obs_retry_seconds"]
+            .as_u64()
+            .is_some()
+    );
+    let listener = Arc::new(
+        TcpListener::bind(("127.0.0.1", port))
+            .await
+            .expect("restart OBS"),
+    );
+    let task = server(listener, Arc::new(Mutex::new("Original".into())), false);
+    engine.last_reconnect = Instant::now()
+        .checked_sub(Duration::from_secs(31))
+        .expect("clock");
+    engine.tick().await.expect("automatic retry");
+    assert!(engine.obs.is_some());
+    assert!(engine.obs_connection_error.is_none());
+    assert!(engine.snapshot().expect("connected snapshot")["obs_retry_seconds"].is_null());
+    task.abort();
+}
+
+#[tokio::test]
 async fn reconnects_after_socket_loss_without_resuming_ownership() {
     let root = tempfile::tempdir().expect("root");
     let listener = Arc::new(TcpListener::bind("127.0.0.1:0").await.expect("listen"));

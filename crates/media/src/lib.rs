@@ -2,6 +2,7 @@
 mod encoding;
 use anyhow::{Context, Result, bail};
 pub use encoding::{Encoder, ExportInfo};
+use owc_domain::status::{MediaStage, Progress};
 use owc_domain::{ClipPlan, Coverage};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,7 +19,7 @@ pub struct Media {
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
     #[serde(skip)]
-    pub progress: Option<tokio::sync::watch::Sender<String>>,
+    pub progress: Option<tokio::sync::watch::Sender<Progress>>,
     #[serde(skip)]
     pub cancel: Option<tokio::sync::watch::Receiver<bool>>,
     #[serde(default)]
@@ -67,6 +68,8 @@ pub struct Probe {
     pub export: Option<ExportInfo>,
     #[serde(skip)]
     stream_layout: Vec<Value>,
+    #[serde(default)]
+    pub creation_time: Option<String>,
     pub duration_ms: i64,
     pub audio_tracks: usize,
     pub video_codec: String,
@@ -160,7 +163,7 @@ fn direct_copy_compatible(plan: &ClipPlan, inputs: &[Probe]) -> Result<bool> {
 }
 async fn run_ffmpeg_progress(
     command: &mut Command,
-    progress: Option<tokio::sync::watch::Sender<String>>,
+    progress: Option<tokio::sync::watch::Sender<Progress>>,
 ) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, BufReader};
     let Some(progress) = progress else {
@@ -188,11 +191,15 @@ async fn run_ffmpeg_progress(
                 speed = value.chars().take(24).collect();
             }
             if line.starts_with("progress=") {
-                progress.send_replace(format!(
-                    "{stage} · {}:{:02} processed · {speed}",
-                    processed / 60,
-                    processed % 60
-                ));
+                let mut update = stage.clone();
+                update.processed_seconds = Some(processed);
+                update.speed = speed
+                    .trim()
+                    .trim_end_matches('x')
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|n| n.is_finite());
+                progress.send_replace(update);
             }
         }
         Ok::<_, std::io::Error>(())
@@ -216,7 +223,7 @@ async fn run_ffmpeg_progress(
 
 async fn run_cancellable_ffmpeg(
     command: &mut Command,
-    progress: Option<tokio::sync::watch::Sender<String>>,
+    progress: Option<tokio::sync::watch::Sender<Progress>>,
     cancel: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> Result<()> {
     if let Some(mut cancel) = cancel {
@@ -235,19 +242,23 @@ impl Media {
         run_cancellable_ffmpeg(command, self.progress.clone(), self.cancel.clone()).await
     }
 
-    fn report(&self, stage: impl Into<String>) {
+    fn report(&self, stage: MediaStage) {
         if let Some(progress) = &self.progress {
-            progress.send_replace(stage.into());
+            progress.send_replace(Progress::new(stage));
         }
     }
 
     fn report_fragment(&self, mode: CutMode, index: usize, count: usize) {
-        let operation = if matches!(mode, CutMode::Fast) {
-            "Copying"
-        } else {
-            "Encoding"
-        };
-        self.report(format!("{operation} fragment {} of {count}", index + 1));
+        if let Some(progress) = &self.progress {
+            let mut update = Progress::new(if matches!(mode, CutMode::Fast) {
+                MediaStage::Copying
+            } else {
+                MediaStage::Encoding
+            });
+            update.completed = u64::try_from(index + 1).ok();
+            update.total = u64::try_from(count).ok();
+            progress.send_replace(update);
+        }
     }
     /// Expands a fast cut to the preceding keyframe and records its real timeline origin.
     pub async fn align_fast_cut(&self, plan: &mut ClipPlan) -> Result<()> {
@@ -273,12 +284,16 @@ impl Media {
                     "json",
                 ])
                 .arg("-read_intervals")
-                .arg(format!("%{}", seconds(first.offset_ms + 1000)))
+                .arg(format!(
+                    "{}%{}",
+                    seconds(first.offset_ms.saturating_sub(30_000).max(0)),
+                    seconds(first.offset_ms + 1000)
+                ))
                 .arg(&first.segment.path),
         )
         .await?;
         let frames: Value = serde_json::from_slice(&output)?;
-        let mut keyframe = 0;
+        let mut keyframe: Option<i64> = None;
         for frame in frames["frames"]
             .as_array()
             .context("keyframe list unavailable")?
@@ -288,11 +303,13 @@ impl Media {
                 if seconds.is_finite() && seconds >= 0.0 {
                     let millis: i64 = format!("{:.0}", seconds * 1000.0).parse()?;
                     if millis <= first.offset_ms {
-                        keyframe = keyframe.max(millis);
+                        keyframe = Some(keyframe.map_or(millis, |old| old.max(millis)));
                     }
                 }
             }
         }
+        let keyframe =
+            keyframe.context("No preceding keyframe found; precise cuts are required")?;
         first.duration_ms += first.offset_ms - keyframe;
         first.offset_ms = keyframe;
         plan.actual_start_ms = Some(first.segment.start_ms + keyframe);
@@ -328,6 +345,9 @@ impl Media {
             .find(|s| s["codec_type"] == "video")
             .context("no video stream")?;
         Ok(Probe {
+            creation_time: v["format"]["tags"]["creation_time"]
+                .as_str()
+                .map(str::to_owned),
             export: None,
             stream_layout: streams
                 .iter()
@@ -385,7 +405,7 @@ impl Media {
         })
     }
     pub async fn export(&self, plan: &ClipPlan, dest: &Path, mode: CutMode) -> Result<Probe> {
-        self.report("Reading source footage");
+        self.report(MediaStage::Reading);
         if matches!(plan.coverage, Coverage::Unavailable | Coverage::Gapped)
             || plan.sources.is_empty()
         {
@@ -418,7 +438,7 @@ impl Media {
             }
             Err(error) if self.cancel.as_ref().is_some_and(|cancel| *cancel.borrow()) => Err(error),
             Err(error) if self.encoder != Encoder::Cpu || matches!(mode, CutMode::Fast) => {
-                self.report("Retrying with CPU encoding");
+                self.report(MediaStage::CpuFallback);
                 let mut software = self.clone();
                 software.encoder = Encoder::Cpu;
                 software
@@ -509,7 +529,7 @@ impl Media {
         let listpath = staging.join("parts.txt");
         fs::write(&listpath, list).await?;
         let pending = staging.join("output.mkv");
-        self.report("Joining fragments and saving audio");
+        self.report(MediaStage::Joining);
         let mut concat = Command::new(&self.ffmpeg);
         concat
             .args([
@@ -634,9 +654,9 @@ impl Media {
             .args(["-avoid_negative_ts", "make_zero", "-movflags", "+faststart"])
             .arg(&pending);
         self.report(if converted {
-            "Converting retained footage for playback"
+            MediaStage::Converting
         } else {
-            "Joining retained footage for playback"
+            MediaStage::Joining
         });
         self.run_ffmpeg(&mut command).await?;
         let probe = self.probe(&pending).await?;
@@ -679,7 +699,7 @@ impl Media {
         staging: &Path,
         audio_tracks: usize,
     ) -> Result<Probe> {
-        self.report("Copying and joining fragments");
+        self.report(MediaStage::Copying);
         let list = concat_list(plan)?;
         let listpath = staging.join("sources.ffconcat");
         fs::write(&listpath, list).await?;
@@ -717,7 +737,7 @@ impl Media {
         mode: CutMode,
         expected_audio: usize,
     ) -> Result<Probe> {
-        self.report("Checking saved video and audio");
+        self.report(MediaStage::Checking);
         let probe = self.probe(path).await?;
         if probe.audio_tracks != expected_audio {
             bail!("export lost audio tracks");
@@ -736,7 +756,7 @@ impl Media {
     }
     /// Decodes every video frame and audio stream before publishing a finished asset.
     pub async fn verify_decodable(&self, path: &Path) -> Result<()> {
-        self.report("Checking saved video and audio");
+        self.report(MediaStage::Checking);
         self.run_ffmpeg(
             Command::new(&self.ffmpeg)
                 .args(["-nostdin", "-v", "error", "-xerror", "-i"])
@@ -753,7 +773,7 @@ impl Media {
             at_ms >= 0 && at_ms < info.duration_ms,
             "Thumbnail time is outside the video"
         );
-        self.report("Creating preview image");
+        self.report(MediaStage::Poster);
         let staging = tempfile::tempdir()?;
         let image = staging.path().join("poster.jpg");
         self.run_ffmpeg(
@@ -797,7 +817,7 @@ impl Media {
         if info.audio_tracks > 0 && tracks.iter().any(|track| *track >= info.audio_tracks) {
             bail!("audio track out of range");
         }
-        self.report("Preparing playback copy");
+        self.report(MediaStage::Playback);
         let pending = dest.with_extension("partial.mp4");
         let mut cmd = Command::new(&self.ffmpeg);
         cmd.args(["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i"])
@@ -1438,14 +1458,15 @@ mod tests {
         let destination = dir.path().join("clip.mkv");
         let (cancel, cancelled) = tokio::sync::watch::channel(true);
         media.cancel = Some(cancelled);
-        let (progress, messages) = tokio::sync::watch::channel(String::new());
+        let (progress, messages) =
+            tokio::sync::watch::channel(Progress::new(MediaStage::Preparing));
         media.progress = Some(progress);
         let error = media
             .export(&plan, &destination, CutMode::Fast)
             .await
             .expect_err("cancel");
         assert!(error.to_string().contains("cancelled"));
-        assert!(!messages.borrow().contains("Retrying with CPU"));
+        assert_ne!(messages.borrow().stage, MediaStage::CpuFallback);
         assert!(!destination.exists());
         assert!(!dir.path().join(format!(".{}-export", activity.id)).exists());
         assert_eq!(std::fs::read(&source).expect("preserved source"), before);
@@ -1461,6 +1482,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fast_cut_seeks_near_late_encounters_and_keeps_preceding_keyframe() {
+        let dir = tempfile::tempdir().expect("temp");
+        let src = dir.path().join("long.mp4");
+        checked(
+            Command::new("ffmpeg")
+                .args([
+                    "-v",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=size=64x64:rate=10",
+                    "-t",
+                    "120",
+                    "-c:v",
+                    "libx264",
+                    "-g",
+                    "100",
+                    "-keyint_min",
+                    "100",
+                    "-sc_threshold",
+                    "0",
+                ])
+                .arg(&src),
+        )
+        .await
+        .expect("long fixture");
+        let mut activity = Activity::new(Kind::Manual, "late".into(), 71_500, "manual");
+        activity.finish(76_000, Outcome::Unknown);
+        let segment = Segment {
+            id: activity.id,
+            session: activity.id,
+            path: src,
+            start_ms: 1000,
+            end_ms: 121_000,
+            closed: true,
+            managed: true,
+        };
+        let mut plan = plan_clip(&activity, &[segment], 0, 0);
+        Media::default()
+            .align_fast_cut(&mut plan)
+            .await
+            .expect("late seek");
+        assert_eq!(plan.sources[0].offset_ms, 70_000);
+        assert_eq!(plan.actual_start_ms, Some(71_000));
+        assert_eq!(plan.sources[0].duration_ms, 5000);
+    }
+
+    #[tokio::test]
     async fn real_media_precise_cut_retains_tracks_and_preview() {
         async fn video_hash(path: &Path) -> Vec<u8> {
             checked(
@@ -1473,7 +1543,8 @@ mod tests {
             .expect("video stream hash")
         }
         let dir = tempfile::tempdir().expect("temp");
-        let (progress, progress_rx) = tokio::sync::watch::channel(String::new());
+        let (progress, progress_rx) =
+            tokio::sync::watch::channel(Progress::new(MediaStage::Preparing));
         let media = Media {
             progress: Some(progress),
             ..Media::default()
@@ -1516,7 +1587,7 @@ mod tests {
         assert!((p.duration_ms - 2000).abs() < 250);
         let preview = dir.path().join("preview.mp4");
         media.preview(&dest, &preview, 1).await.expect("preview");
-        assert!(progress_rx.borrow().contains("processed"));
+        assert!(progress_rx.borrow().processed_seconds.is_some());
         assert_eq!(media.probe(&preview).await.expect("probe").audio_tracks, 1);
         assert_eq!(video_hash(&dest).await, video_hash(&preview).await);
         let modified = fs::metadata(&preview)

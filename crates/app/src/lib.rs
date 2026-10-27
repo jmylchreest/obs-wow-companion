@@ -10,6 +10,7 @@ mod installations;
 mod launcher_paths;
 mod log_watcher;
 pub mod readiness;
+mod recovery;
 mod sharing;
 mod sidecar;
 use anyhow::{Context, Result};
@@ -236,6 +237,16 @@ fn ui_routes() -> Router<Web> {
         }),
     );
     for (path, content_type, source) in [
+        (
+            "/recovery.js",
+            "text/javascript",
+            include_str!("../ui/recovery.js"),
+        ),
+        (
+            "/messages.js",
+            "text/javascript",
+            include_str!("../ui/messages.js"),
+        ),
         (
             "/vendor/video.min.js",
             "text/javascript",

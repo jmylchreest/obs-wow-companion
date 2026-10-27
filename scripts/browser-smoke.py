@@ -63,6 +63,13 @@ try:
         return next(iter(found.values()))
     def click(selector):
         js("document.querySelector(arguments[0]).scrollIntoView({block:'center'});", [selector])
+        previous = None
+        for _ in range(20):
+            bounds = js("const r=document.querySelector(arguments[0]).getBoundingClientRect();return [r.x,r.y,r.width,r.height]", [selector])
+            if bounds == previous:
+                break
+            previous = bounds
+            time.sleep(.1)
         driver(prefix + "/element/" + element(selector) + "/click", {})
     time.sleep(2)
     assert js("return document.getElementById('setup-wizard').open") is True, js("return document.getElementById('error').textContent")
@@ -92,7 +99,7 @@ try:
                 break
         assert js("return state.connected") is True
         if os.environ.get("OWC_TEST_PRIVATE_KEYRING") == "1":
-            assert js("return state.credential_status") == "Password saved in your system password store."
+            assert js("return state.credential_status.code") == "saved"
         assert js("return document.getElementById('wizard-password').value") == ""
         assert js("return wizardStep") == 1, "connection should advance automatically"
         assert js("return document.getElementById('wizard-success').hidden") is True
@@ -182,8 +189,18 @@ try:
         click('#wizard-close')
     assert js("return document.getElementById('setup-wizard').open") is False
     click('#library-tab')
+    assert js("const old=structuredClone(state);state.connected=false;state.automatic_paused=false;state.obs_connection_error={code:'connect_failed',diagnostic:'Authentication failed'};renderState(state);const ok=document.getElementById('obs-tooltip').textContent.includes('Authentication failed')&&document.getElementById('automatic-toggle').textContent==='Auto recording blocked'&&document.getElementById('automatic-toggle').getAttribute('aria-checked')==='true';renderState(old);return ok") is True
     assert js("const before=structuredClone(state),previous=selected;state.active=[{id:'automatic-fixture',name:'Current boss',kind:'raid',start_ms:Date.now(),markers:[],outcome:'unknown'}];selected='automatic-fixture';renderState(state);const ok=!document.getElementById('live')&&!document.getElementById('manual-end').hidden&&!document.getElementById('manual-end').disabled&&document.getElementById('manual').hidden&&stoppableRecording().id==='automatic-fixture';selected=previous;renderState(before);return ok") is True
     assert js("const w=document.getElementById('recording-workspace'),l=document.getElementById('recordings-pane'),r=w.querySelector('.review');return Math.abs(r.getBoundingClientRect().left-l.getBoundingClientRect().right-1)<1&&getComputedStyle(r).borderLeftWidth==='0px'") is True
+    js("window.recoveryLayoutSnapshot=structuredClone(state);state.recovery={stage:'checking',total:4,completed:2,records:{},issues:[],waiting:false};renderRecovery()")
+    assert js("const panel=document.getElementById('recovery-panel'),bar=document.getElementById('recovery-progress'),head=panel.querySelector('.recovery-header');return !bar.hidden&&bar.getBoundingClientRect().top>=head.getBoundingClientRect().bottom&&Math.abs(bar.getBoundingClientRect().width-head.getBoundingClientRect().width)<1") is True
+    js("state.recovery={stage:'needs_attention',total:4,completed:4,records:{a:{stage:'complete'},b:{stage:'complete'},c:{stage:'needs_attention'}},issues:[{path:'/home/player/.local/share/obswowcompanion/spool/2026-10-26 15-34-53.mp4',reason:'timing_uncertain'}]};renderRecovery()")
+    assert js("const panel=document.getElementById('recovery-panel'),review=document.getElementById('recovery-issues'),actions=panel.querySelector('.actions'),head=panel.querySelector('.recovery-header');return document.getElementById('recovery-progress').hidden&&review.open&&!review.hidden&&review.getBoundingClientRect().top>=head.getBoundingClientRect().bottom&&Math.abs(review.getBoundingClientRect().width-head.getBoundingClientRect().width)<1&&Math.abs(actions.getBoundingClientRect().top-head.getBoundingClientRect().top)<1") is True
+    assert js("return !document.getElementById('recovery-events')&&!document.getElementById('recovery-dismiss')&&!document.querySelector('#recovery-issue-list button')&&document.getElementById('recovery-issue-list').textContent.includes('Not automatically cleaned up')") is True
+    js("state.recovery.issues.push({path:'/home/player/.local/share/obswowcompanion/spool/empty.mp4',reason:'empty_source',fingerprint:[0,1]});renderRecovery()")
+    assert js("return document.querySelectorAll('#recovery-issue-list button').length===1&&document.querySelector('#recovery-issue-list button').textContent==='Delete file'") is True
+    (root/'recovery-panel.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
+    js("renderState(window.recoveryLayoutSnapshot)")
     # A previously hidden workspace gets its restored width in ResizeObserver.
     # Measure only after that layout pass, otherwise the pointer can miss the divider.
     for _ in range(50):
@@ -217,10 +234,11 @@ try:
     assert js("return getComputedStyle(document.getElementById('obs-tooltip')).display") == 'none'
     click('#connection')
     assert js("return getComputedStyle(document.getElementById('obs-tooltip')).display") == 'block'
-    js("window.tooltipSnapshot=structuredClone(state);state.connected=true;state.setup={checks:[],checking:false};state.credential_status='Reconnected to OBS.';renderSetup()")
+    assert js("const old=structuredClone(state);state.connected=false;state.obs_connection_error={code:'unreachable'};state.credential_status={code:'store_failed',diagnostic:'Old password error'};state.obs_retry_seconds=12;renderSetup();const text=document.getElementById('obs-tooltip').textContent;const ok=document.getElementById('connection').textContent==='OBS offline'&&text.includes('Cannot reach OBS')&&text.includes('12s')&&!text.includes('password')&&!text.includes('Old password error');state.obs_connection_error={code:'credential_store'};renderSetup();const store=document.getElementById('connection').textContent==='OBS · Password store';renderState(old);return ok&&store") is True
+    js("window.tooltipSnapshot=structuredClone(state);state.connected=true;state.obs_connection_error=null;state.setup={checks:[],checking:false};state.credential_status={code:'reconnected'};renderSetup()")
     assert js("return document.getElementById('obs-tooltip').textContent") == 'Ready.'
-    js("state.credential_status='Password could not be saved.';state.setup.checks=[{id:'directory',status:'fail',title:'Recording folder',detail:'Change the recording folder.'}];renderSetup()")
-    assert js("return document.getElementById('obs-tooltip').textContent") == 'Change the recording folder.\nPassword could not be saved.'
+    js("state.credential_status={code:'store_failed',diagnostic:'Password could not be saved.'};state.setup.checks=[{id:'directory',status:'fail',title:'Recording folder',detail:'Change the recording folder.'}];renderSetup()")
+    assert js("return document.getElementById('obs-tooltip').textContent") == 'Change the recording folder.\nCould not use the system password store.\nPassword could not be saved.'
     js("state=window.tooltipSnapshot;renderSetup()")
     click('#connection')
     assert js("return getComputedStyle(document.getElementById('obs-tooltip')).display") == 'none'
@@ -294,8 +312,17 @@ try:
     js("recordingById(selected).processing={stage:'observed_source',title:'Waiting for OBS',detail:'OBS is still recording. Stop recording in OBS so the remaining footage can be checked.'};renderContext()")
     assert js("return document.getElementById('review-state').textContent") == 'Waiting for OBS'
     assert js("return document.getElementById('empty-player').textContent.includes('Stop recording in OBS')") is True
-    js("recordingById(selected).status='exporting';recordingById(selected).processing={stage:'exporting',title:'Saving clip',detail:'Encoding fragment 2 of 3',elapsed_seconds:65};renderContext()")
-    assert js("return document.getElementById('empty-player').textContent") == 'Encoding fragment 2 of 3 · 1:05 elapsed'
+    js("recordingById(selected).status='exporting';recordingById(selected).processing={stage:'exporting',title:'Saving clip',progress:{stage:'encoding',completed:2,total:3},elapsed_seconds:65};renderContext()")
+    assert js("return document.getElementById('empty-player').textContent") == 'Encoding footage · 2 of 3 · 1:05 elapsed'
+
+    assert js("const old=uiLocale;uiLocale='de-DE';const valid=formatNumber(1234.5)==='1.234,5'&&searchText('E\\u0301')===searchText('É')&&message('not.a.real.key')===englishMessages.unknown;uiLocale=old;return valid") is True
+    assert js("const old=englishMessages['credential.saved'];englishMessages['credential.saved']='[Saved test translation]';const result=noticeText('credential',{code:'saved'})==='[Saved test translation]';englishMessages['credential.saved']=old;return result") is True
+    js("recordingById(selected).status='unavailable';delete recordingById(selected).processing;recordingById(selected).recovery={stage:'unrecoverable',reason:'missing_source'};renderContext()")
+    assert js("return document.getElementById('review-state').textContent") == 'Unrecoverable'
+    assert js("return document.getElementById('empty-player').textContent.includes('Restore the original footage')") is True
+    assert js("return !reviewPlayer.controls()") is True
+    js("recordingById(selected).recovery={stage:'needs_attention',reason:'timing_uncertain'};renderContext()")
+    assert js("return document.getElementById('review-state').textContent.includes('could not be verified')") is True
 
     js("renderState(window.readySnapshot)")
     for _ in range(100):

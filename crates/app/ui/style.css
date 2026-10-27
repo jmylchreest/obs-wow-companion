@@ -172,3 +172,20 @@ main{width:100%;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:
 
 .video-shell .vjs-audio-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;vertical-align:middle}
 #audio-menu{max-width:min(320px,calc(100% - 24px))}#audio-menu label{overflow-wrap:anywhere}#audio-menu input{flex-shrink:0}
+
+.automatic-status[data-blocked=true]{color:#e6b86e;border-color:#806137}.automatic-status[data-blocked=true]::before{background:currentColor}
+
+
+
+#recovery-panel{flex-shrink:0;display:flex;flex-direction:column;gap:10px;padding:10px 14px;margin-bottom:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);font-size:12px}
+.recovery-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px 16px;flex-wrap:wrap}.recovery-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;flex:1 1 20rem;min-width:0;padding-block:5px}#recovery-summary{color:var(--muted)}#recovery-panel .actions{margin-inline-start:auto;flex-shrink:0}#recovery-panel button{padding:5px 9px;font-size:12px}
+#recovery-progress{display:block;width:100%;height:6px;accent-color:var(--accent);border:0;border-radius:3px;overflow:hidden}#recovery-progress::-webkit-progress-bar{background:var(--border);border-radius:3px}#recovery-progress::-webkit-progress-value{background:var(--accent);border-radius:3px}#recovery-progress::-moz-progress-bar{background:var(--accent);border-radius:3px}
+#recovery-panel details{margin:0;min-width:0;width:100%}#recovery-issue-list{max-height:min(16rem,30vh);overflow:auto;overflow-wrap:anywhere;margin-block:0 12px}#recovery-issue-list li+li{border-top:1px solid var(--border)}
+
+#recovery-issue-list{list-style:none;padding:0}#recovery-issue-list li{display:flex;align-items:flex-start;gap:12px;padding-block:12px}#recovery-issue-list li:first-child{padding-block-start:2px}#recovery-issue-list li:last-child{padding-block-end:4px}#recovery-issue-list li>div{display:grid;gap:3px;flex:1;min-width:0}#recovery-issue-list small{color:var(--muted);font-size:inherit;line-height:1.5}#recovery-issue-list button{flex-shrink:0}.recovery-file-path{overflow-wrap:anywhere}
+
+/* Keep native scrolling and keyboard support, with room for row actions beside it. */
+*{scrollbar-width:thin;scrollbar-color:#536875 transparent}*::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-track{background:transparent}*::-webkit-scrollbar-thumb{background:#536875;border:2px solid var(--panel);border-radius:8px}*::-webkit-scrollbar-thumb:hover{background:#78939f}*::-webkit-scrollbar-corner{background:transparent}
+#recordings{padding-inline-end:12px}.death-scroll,#event-scroll,#recovery-issue-list,#watcher-status{padding-inline-end:8px}
+#app-status #open-events{width:28px;height:24px;padding:0;display:grid;place-items:center;flex-shrink:0;border-radius:4px}.events-chevron{width:0;height:0;border-inline:5px solid transparent;border-bottom:5px solid currentColor}#open-events[aria-expanded=true] .events-chevron{transform:rotate(180deg)}
+@media(forced-colors:active){*{scrollbar-color:auto}}

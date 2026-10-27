@@ -962,3 +962,10 @@ The credential-store probe already sets private paths and keeps its own launcher
 The final isolated OBS/browser setup suite passes in `/tmp/owc-browser-f3vcm2x6`,
 including wrapper cleanup. The desktop signing socket inode is unchanged before
 and after the complete run. Workflow lint and all seven CI policy tests pass.
+
+## Recovery and typed status validation (2026-10-27)
+
+- Strict workspace Clippy and the 104-test nextest suite passed during the status/recovery pass; seven opt-in native tests remain excluded from that run. Isolated WebKit smoke tests passed, including unrecoverable/uncertain player states, hidden playback controls, OBS failure propagation and numeric progress.
+- An isolated SQLite backup and timestamp-preserving copy of the Oct 26 source MP4 recovered both the Temple +20 and Blinding Vale +21 recordings through the normal app API and fast export worker. Both reached ready after media validation. Source size and modification timestamp remained unchanged; the live database was not edited. Local evidence: `/tmp/owc-source-recovery-z091ppb4/result.json`. Personal footage is not committed.
+- Recovery tests cover empty folders, uncertain source timing, persisted unrecoverable results, retry, idempotent reconciliation and preservation of unowned files.
+- “Unrecoverable” is scoped to footage available in the checked recording folder. Metadata remains available and a user can restore missing files and check again. Offline OBS, unverified timing and failed exports stay retryable.

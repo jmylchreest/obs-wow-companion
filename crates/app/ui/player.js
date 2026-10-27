@@ -147,9 +147,13 @@ function updatePlaybackAvailability(){
   reviewPlayer.controls(playable);$('empty-player').hidden=playable;
   if(playable)return;
   const recording=recordingById(selected);
+  if(recording?.recovery?.stage==='unrecoverable'){
+    $('empty-player').textContent=recoveryText(recording.recovery,true);
+    return;
+  }
   if(recording?.processing){
     const progress=recording.processing;
-    $('empty-player').textContent=progress.detail+(progress.elapsed_seconds!=null?' · '+timeLabel(progress.elapsed_seconds)+' elapsed':'');
+    $('empty-player').textContent=processingText(progress,true)+(progress.elapsed_seconds!=null?' · '+message('status.elapsed',{duration:timeLabel(progress.elapsed_seconds)}):'');
     return;
   }
   $('empty-player').textContent=recording?.status==='pending'?'Encounter finished. The video clip is not ready yet.':recording?.status==='exporting'?'Exporting video…':recording?.status==='unavailable'?'No playable video is available for this encounter.':recording?.status==='failed'?'Video export failed.':matches?'Loading video…':preview?.key===selected&&preview?.status==='generating'?'Preparing playback…':selected?'No playable video yet.':'Select a recording';

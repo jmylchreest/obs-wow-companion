@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use base64::Engine as _;
+use owc_domain::status::{MediaStage, Progress};
 use owc_domain::{Activity, Kind, Outcome, Segment, plan_clip};
 use owc_media::{CutMode, Media};
 use serde_json::{Value, json};
@@ -88,7 +89,7 @@ fn validate_destination(dest: &std::path::Path) -> Result<()> {
 pub async fn export(
     request: ShareRequest,
     mut media: Media,
-    progress: watch::Sender<String>,
+    progress: watch::Sender<Progress>,
 ) -> Result<Value> {
     let mut cancel = request.cancel.clone();
     anyhow::ensure!(!*cancel.borrow(), "Export cancelled");
@@ -186,7 +187,7 @@ fn pack(
     video: &std::path::Path,
     html: &str,
     metadata: &[u8],
-    progress: &watch::Sender<String>,
+    progress: &watch::Sender<Progress>,
     cancel: &watch::Receiver<bool>,
     poster: &[u8],
 ) -> Result<()> {
@@ -215,6 +216,10 @@ fn pack(
         (
             "COMPANION-LICENSE.txt",
             include_bytes!("../../../LICENSE").as_slice(),
+        ),
+        (
+            "assets/messages.js",
+            include_bytes!("../ui/messages.js").as_slice(),
         ),
         (
             "assets/viewer.js",
@@ -254,10 +259,10 @@ fn pack(
         }
         zip.write_all(&buffer[..count])?;
         copied += u64::try_from(count)?;
-        progress.send_replace(format!(
-            "Writing ZIP: {}%",
-            copied.saturating_mul(100) / total.max(1)
-        ));
+        let mut update = Progress::new(MediaStage::WritingZip);
+        update.completed = Some(copied);
+        update.total = Some(total);
+        progress.send_replace(update);
     }
     anyhow::ensure!(!*cancel.borrow(), "Export cancelled");
     zip.finish()?;
@@ -324,7 +329,7 @@ mod tests {
         std::fs::write(&filler, vec![0_u8; 3 * 1024 * 1024]).expect("fill private filesystem");
         let before = std::fs::read_dir(&limited).expect("directory").count();
         let destination = limited.join("share.zip");
-        let (progress, _) = watch::channel(String::new());
+        let (progress, _) = watch::channel(Progress::new(MediaStage::Preparing));
         let (_cancel, cancelled) = watch::channel(false);
         let error = pack(
             &destination,
@@ -374,7 +379,7 @@ mod tests {
         let video = root.path().join("source.mp4");
         let destination = root.path().join("share.zip");
         std::fs::write(&video, vec![42_u8; 2 * 1024 * 1024]).expect("source");
-        let (progress, updates) = watch::channel(String::new());
+        let (progress, updates) = watch::channel(Progress::new(MediaStage::Preparing));
         let (cancel, cancelled) = watch::channel(false);
         // Hold the progress read lock so the writer cannot pass its first chunk.
         let held_progress = updates.borrow();
@@ -430,7 +435,7 @@ mod tests {
         let video = root.path().join("source.mp4");
         let destination = root.path().join("share.zip");
         std::fs::write(&video, b"source footage").expect("source");
-        let (progress, _) = watch::channel(String::new());
+        let (progress, _) = watch::channel(Progress::new(MediaStage::Preparing));
         let (cancel, cancelled) = watch::channel(true);
         assert!(
             pack(
@@ -502,7 +507,7 @@ mod tests {
             destination,
             cancel: cancelled.clone(),
         };
-        let (progress, _) = watch::channel(String::new());
+        let (progress, _) = watch::channel(Progress::new(MediaStage::Preparing));
         let destination = root.path().join("good.zip");
         export(
             make_request(destination.clone()),
@@ -552,7 +557,7 @@ mod tests {
         let video = root.path().join("input.mp4");
         std::fs::write(&video, b"fixture video bytes").expect("video");
         let destination = root.path().join("share.zip");
-        let (progress, _) = watch::channel(String::new());
+        let (progress, _) = watch::channel(Progress::new(MediaStage::Preparing));
         pack(
             &destination,
             &video,

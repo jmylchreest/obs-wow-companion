@@ -1,5 +1,6 @@
 //! Transactional library and durable capture checkpoints.
 use anyhow::{Context, Result, bail};
+use owc_domain::status::RecordingStatus;
 use owc_domain::{Activity, ClipPlan, Segment};
 use rusqlite::{Connection, params};
 use serde_json::Value;
@@ -161,15 +162,20 @@ impl Library {
         )?;
         Ok(())
     }
-    pub fn fail(&self, id: &str, status: &str, error: &str) -> Result<()> {
+    pub fn fail(&self, id: &str, status: RecordingStatus, error: &str) -> Result<()> {
         self.db.execute(
             "UPDATE activities SET status=?2,error=?3 WHERE id=?1",
-            params![id, status, error],
+            params![id, status.as_str(), error],
         )?;
         Ok(())
     }
     pub fn retry(&self, id: &str) -> Result<()> {
         self.db.execute("UPDATE activities SET status='pending',error=NULL WHERE id=? AND status IN ('failed','unavailable')",[id])?;
+        Ok(())
+    }
+    pub fn retry_recovery(&self, id: &str) -> Result<()> {
+        // A recovered source set supersedes any plan referencing vanished files.
+        self.db.execute("UPDATE activities SET status='pending',plan=NULL,error=NULL WHERE id=? AND status IN ('pending','failed','unavailable')", [id])?;
         Ok(())
     }
     pub fn annotate(&self, id: &str, protected: bool, tags: &[String]) -> Result<()> {
@@ -397,8 +403,12 @@ mod tests {
         let plan = owc_domain::plan_clip(&trim, &[source], 0, 0);
         db.begin_export(&plan, &dir.path().join("trim.mkv"), true)
             .expect("job");
-        db.fail(&trim.id.to_string(), "failed", "simulated disk full")
-            .expect("failure");
+        db.fail(
+            &trim.id.to_string(),
+            RecordingStatus::Failed,
+            "simulated disk full",
+        )
+        .expect("failure");
         assert!(db.deletable_path(&original.id.to_string()).is_err());
         db.delete(&trim.id.to_string()).expect("remove failed job");
         assert_eq!(
