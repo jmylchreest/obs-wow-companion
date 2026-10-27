@@ -1,7 +1,7 @@
 # First-release completion audit
 
 Status: **not qualified for a stable release**. Last reviewed 2026-10-27.
-The development-preview gate is documented in [releasing](releasing.md); a preview does not waive these stable-release requirements. This audit preserves the
+The [0.1.0-dev.1 testing preview](https://github.com/jmylchreest/obs-wow-companion/releases/tag/v0.1.0-dev.1) passed all automated publication gates and is public. Its gate is documented in [releasing](releasing.md); a preview does not waive these stable-release requirements. This audit preserves the
 full [specification](specification.md), including the former 1.0 scope. Passing a
 unit test does not establish native gameplay compatibility. Historical external
 checks are described in [validation](validation.md); rerun them against the final

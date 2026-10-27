@@ -79,3 +79,5 @@ This is a source review, not a completed localization migration. Implement the f
 The user authorised a labelled development preview while broader stable-release qualification continues. Player-facing quick start, report forms, release notes and a GitHub invitation draft are prepared; Reddit talking points are provided for the author to write and send personally. Public assets use isolated fictional metadata and privacy-obscured, muted gameplay. Local documentation, release-boundary tests and desktop/mobile site checks pass.
 
 Publication still requires both native package jobs, bundle verification and both installer smoke tests to pass. The release workflow enforces those dependencies. Stable-release requirements above remain unchanged.
+
+The tagged `0.1.0-dev.1` preview is now public: release run `40552480545` passed all quality, native package, bundle and installer gates. The remaining next step is collecting real-player reports, particularly Windows and experimental modes, before making broader support or stable-release claims.
