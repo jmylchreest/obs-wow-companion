@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Changed
+
+- Match adjacent buttons and inputs in Settings, export controls, marker entry, the events toolbar and the labels footer.
+
+- Compact settings fields and installation rows, with automatic-recording controls grouped beneath each installation.
+
+- Simplify automatic recording preferences per installation: raid minimum difficulty or Off, Mythic+ minimum level or Off, and delves off by default.
+
+- Let the death list fill the review pane, with Export and Video details kept above the labels footer.
+
+- Align the recording filters to the right and add a matching protected-recordings toggle.
 - Use consistent dark scrollbars throughout the app, leave room beside recording actions, and replace the events footer label with an accessible expand/collapse button.
 - Keep recovery actions beside the status heading, with a full-width progress bar below that gives way to the file review panel when finished. Remove banner dismissal and event shortcuts; empty unrecoverable files offer confirmed deletion, with cleanup policy shown per file.
 
@@ -12,6 +22,10 @@
 - Distinguish unrecoverable recordings from footage still awaiting recovery. Explain missing footage, preserve encounter details, and allow checking again after restoring source files.
 
 ### Fixed
+
+- Retain the paused video frame when switching between Recordings and Settings.
+
+- Read OBS audio track names stored in NAME metadata, including existing recordings.
 - Clear the attention banner when no unresolved file or retryable recording issues remain, including stale results saved by older builds. Keep historical unrecoverable statuses on their recordings.
 - Show OBS as offline when its WebSocket server is unreachable, suppress stale password-store warnings, and show the automatic retry countdown.
 - Retain OBS connection errors in the event log and status pill, and show automatic recording as blocked while OBS or setup is unavailable.
@@ -61,6 +75,8 @@
 - Retain combat-log checkpoint acknowledgements after database write failures and retry automatically, saving pending encounters with the cursor before allowing watchers to advance.
 
 ### Added
+
+- Add experimental Retail delve recording from zone entry to exit, with death and boss markers, a Delves filter and a DV title prefix. Existing installations can enable it in Activity filters; tier and completion are not inferred.
 
 - Attach raw log timestamps, normalized event times, receipt times, file identities and exact byte offsets to emitted log events for timing diagnostics.
 

@@ -12,6 +12,7 @@ pub type Millis = i64;
 pub enum Kind {
     Raid,
     MythicPlus,
+    Delve,
     Arena,
     SoloShuffle,
     Battleground,

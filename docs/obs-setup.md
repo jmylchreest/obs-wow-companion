@@ -298,3 +298,14 @@ Open **Settings → Advanced → Check recordings** to check retained source foo
 The OBS status pill separates an unreachable WebSocket endpoint (**OBS offline**) from a reachable OBS that needs a password or cannot access the system password store. A disconnected companion retries automatically with backoff up to 30 seconds; the pill details show the next retry. Old password-store warnings do not override the offline state. Offline does not distinguish a closed OBS process from a disabled or differently configured WebSocket server.
 
 Recovery review files are not automatically deleted: the panel says **Not automatically cleaned up. Kept for review.** Unknown timing can still mean valid footage. Empty files are classified as unrecoverable and offer **Delete file** with confirmation. Deletion refuses changed files, indexed sources, active recording or media jobs, and files outside the temporary recording folder. Successfully completed recovery hides its banner automatically.
+
+### Choose what records automatically
+
+In **Settings → WoW installations → Automatic recording**, choose a separate policy for each installation:
+
+- **Raids:** Off, All raids, Normal and above, Heroic and above, or Mythic only. All raids includes Raid Finder and supported legacy raid modes. Minimum thresholds recognise normal, heroic and mythic difficulty IDs; unclassified legacy modes are excluded when a minimum is selected.
+- **Mythic+:** Off, Any key, or Minimum key level.
+- **Delves:** Off by default; enable experimental recording explicitly.
+- Arena, Solo Shuffle and battlegrounds retain their individual switches.
+
+Save preferences to apply these choices. They filter automatic recording, not manual clips or markers. Existing custom difficulty filters are preserved until you deliberately choose a new raid setting.

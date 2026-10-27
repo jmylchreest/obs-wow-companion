@@ -189,3 +189,63 @@ main{width:100%;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:
 #recordings{padding-inline-end:12px}.death-scroll,#event-scroll,#recovery-issue-list,#watcher-status{padding-inline-end:8px}
 #app-status #open-events{width:28px;height:24px;padding:0;display:grid;place-items:center;flex-shrink:0;border-radius:4px}.events-chevron{width:0;height:0;border-inline:5px solid transparent;border-bottom:5px solid currentColor}#open-events[aria-expanded=true] .events-chevron{transform:rotate(180deg)}
 @media(forced-colors:active){*{scrollbar-color:auto}}
+
+.sort-row #favourites-only{margin-inline-start:auto}.sort-row .icon-button{flex-shrink:0;width:30px;height:30px}
+
+/* Give spare review space to deaths; disclosures stay above the labels footer. */
+.review-scroll{display:flex;flex-direction:column}
+.review-scroll>.panel-title{flex-shrink:0}
+.review-scroll #deaths-panel{display:flex;flex-direction:column;flex:1 0 110px;min-height:110px}
+#deaths-panel>.panel-title{flex-shrink:0}
+.review-scroll .death-scroll{flex:1;min-height:0;max-height:none;overflow:auto}
+#recording-tools{flex:0 1 auto;min-height:0;max-height:45%;overflow:auto;padding:0 12px 12px;scrollbar-gutter:stable;overscroll-behavior:contain}
+#recording-tools>details{margin:0 0 10px}
+#recording-tools>details:last-of-type{margin-bottom:0}
+#recording-tools .recording-actions:has(>button:not([hidden])){margin-bottom:0}
+#recording-tools .recording-actions:not(:has(>button:not([hidden]))){display:none}
+
+.recording-prefix.delve{color:#b8a0e6}
+
+.video-shell .vjs-control-bar{z-index:5}
+.settings-scroll{padding:16px 20px}.settings-scroll h3{margin:18px 0 8px}
+.settings-scroll input:not([type=checkbox]),.settings-scroll select{font-size:13px;padding:6px 8px;min-height:32px}
+.settings-scroll label{margin:6px 0}.settings-scroll .two-col{gap:2px 24px;max-width:760px}
+.settings-scroll label:has(>input[type=number]){display:flex;align-items:center;justify-content:space-between;gap:12px}
+.settings-scroll label>input[type=number]{flex:0 0 92px;width:92px;margin:0}
+.settings-scroll>section>label:has(input){max-width:760px}
+.settings-scroll .installation{display:grid;grid-template-columns:minmax(100px,150px) minmax(90px,120px) minmax(160px,1fr) auto;gap:8px 12px;padding:12px;margin:10px 0}
+.settings-scroll .installation>label{margin:0;min-width:0}
+.installation-field-name{grid-column:1;grid-row:1}.installation-field-flavour{grid-column:2;grid-row:1}.installation-field-logs{grid-column:3;grid-row:1}
+.settings-scroll .remove-installation{grid-column:4;grid-row:1;align-self:end;margin:0;padding:6px 9px;font-size:12px;min-height:32px}
+.settings-scroll .automatic-recording-options{grid-column:1/-1;margin:0}
+.automatic-recording-options>label{display:grid;grid-template-columns:minmax(140px,1fr) minmax(140px,220px);align-items:center;gap:12px;max-width:520px}
+.automatic-recording-options>label>select{margin:0}
+.automatic-recording-options>.category-list{margin:8px 0 12px}
+@media(max-width:900px){.settings-scroll .installation{grid-template-columns:minmax(100px,1fr) minmax(100px,1fr) auto}.installation-field-logs{grid-column:1/-1;grid-row:2}.settings-scroll .remove-installation{grid-column:3}.settings-scroll .two-col{grid-template-columns:1fr}.automatic-recording-options>label{grid-template-columns:1fr 1fr}}
+
+.settings-scroll input:not([type=checkbox]),.settings-scroll select,.settings-scroll .remove-installation{height:34px}
+.settings-scroll select{appearance:none;background:#101a22 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%239eafb9'/%3E%3C/svg%3E") no-repeat right 9px center;padding-right:28px}
+
+/* Inputs and their adjacent actions share one size and bottom alignment. */
+:root{--control-height:34px;--compact-control-height:30px}
+.settings-scroll .scene-setting{align-items:flex-end;gap:8px}
+.settings-scroll .scene-setting label{margin:0}
+.settings-scroll .scene-setting button{margin:0;flex-shrink:0}
+.settings-scroll button:not(.text-button),.settings-footer button{min-height:var(--control-height);height:var(--control-height);padding-block:0;line-height:20px}
+:is(.scene-setting,.path-picker,.export-range,#marker-form) :is(input:not([type=checkbox]),select,button){height:var(--control-height);min-height:var(--control-height);box-sizing:border-box;margin-block:0;line-height:20px}
+#trim :is(.path-picker,.export-range) button{height:var(--control-height);padding-block:0}
+#trim #browse-share{width:var(--control-height);height:var(--control-height);padding:7px}
+#trim .export-range label{margin:0}
+#trim .export-range input{margin-top:5px}
+#events-dock .events-toolbar :is(input[type=search],button),#labels-panel :is(#tags,#delete){height:var(--compact-control-height);min-height:var(--compact-control-height);box-sizing:border-box;padding-block:0;line-height:20px;margin-block:0}
+#marker-form{align-items:center}
+
+/* Keep the paused media surface laid out while Settings covers the library. */
+#main-views{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);flex:1;min-height:0;min-width:0;overflow:hidden}
+#main-views>section{grid-area:1/1;min-height:0;min-width:0}
+#setup-view{position:relative;z-index:1;background:var(--bg)}
+#setup-view .settings-workspace{height:100%}
+
+#main-views{isolation:isolate}
+#library-view{position:relative;z-index:0;isolation:isolate}
+#setup-view{isolation:isolate}

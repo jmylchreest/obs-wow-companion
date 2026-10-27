@@ -500,6 +500,7 @@ mod tests {
             categories: vec![],
             difficulties: vec![],
             minimum_key: 0,
+            minimum_raid_difficulty: None,
         }
     }
     fn append(path: &std::path::Path, line: &str) {
@@ -609,6 +610,42 @@ mod tests {
                 5
             );
         }
+    }
+
+    #[test]
+    fn delve_boundaries_publish_sourced_lifecycle_events() {
+        let root = tempfile::tempdir().expect("root");
+        let config = installation(root.path().into());
+        let file = config.logs.join("WoWCombatLog-delve.txt");
+        let now = 1_768_478_400_000;
+        let mut state = LogState::new(&config);
+        poll(&config, &mut state, now, i64::MAX);
+        append(
+            &file,
+            "01/15/2026 12:00:00.000  ZONE_CHANGE,100,Test delve,208",
+        );
+        append(&file, "01/15/2026 12:00:01.000  ZONE_CHANGE,1,World,0");
+        let (events, errors, _) = poll(&config, &mut state, now, i64::MAX);
+        assert_eq!(errors, 0);
+        let activities = events
+            .iter()
+            .filter_map(|event| match &event.event {
+                ActivityEvent::Started(a) | ActivityEvent::Finished(a) => Some(a),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(activities.len(), 2);
+        for activity in &activities {
+            assert_eq!(activity.kind, owc_domain::Kind::Delve);
+            assert_eq!(activity.installation_id, Some(config.id));
+            let restored: Activity =
+                serde_json::from_value(serde_json::to_value(activity).expect("serialize"))
+                    .expect("restore");
+            assert_eq!(restored.kind, owc_domain::Kind::Delve);
+        }
+        assert_eq!(activities[0].id, activities[1].id);
+        assert_eq!(activities[1].outcome, Outcome::Unknown);
+        assert!(activities[1].end_ms.is_some());
     }
 
     #[test]

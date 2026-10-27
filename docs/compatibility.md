@@ -23,6 +23,7 @@ The tested starter uses x264, AAC, MKV, 720p/30 and manual splitting. Other enco
 | Retail Mythic+ | Whole run, nested bosses, key metadata and abandonment | Synthetic 45-minute run and duplicate-start regression | Pending |
 | Arena / skirmish | Match boundaries and result metadata where logged | Synthetic parser coverage | Pending |
 | Solo Shuffle | Match with round markers and zone exit | Synthetic state-machine coverage | Pending |
+| Delves (Retail, experimental) | Entry/exit from difficulty 208 zone events; deaths and logged boss markers; unknown result | Synthetic lifecycle tests | Pending real delve logs and gameplay validation; tier and completion are not inferred |
 | Battleground | Explicit zone boundaries, unknown result when unavailable | Synthetic zone handling | Pending; each advertised battleground needs labelled logs |
 | Classic family | Flavour selection and supported encounter/zone events | Synthetic Classic fixture | Pending for each named client version and activity |
 
@@ -35,3 +36,11 @@ Record OS/build, desktop/session, OBS/WebSocket version, encoder/settings, WoW f
 For each supported combination, record a visible clock and continuous audio signal across splits. Compare start/death/boss markers with the recording, including a delayed start, consecutive pulls, abandonment and a zone change. Verify live review and each audio track while capture continues. Test ownership by starting a recording manually, connecting/disconnecting the companion and confirming OBS remains recording. Exercise pause/resume, crash/restart, disk pressure and streaming concurrency in a disposable setup.
 
 Keep expected results and measurements with each fixture. A successful build, API connection or synthetic clip does not complete these checks. See [validation](validation.md) for executed checks and [OBS setup](obs-setup.md) for configuration steps.
+
+### Delve recording (experimental)
+
+Enable **Delves** under **Settings → WoW installations → Automatic recording** for each existing Retail installation, then save preferences. Delves are off by default for new installations. Enable `/combatlog` before entering the delve; automatic logging add-ons must also have delve logging enabled.
+
+Recording starts on a `ZONE_CHANGE` with difficulty 208 and ends on a valid zone change out of that delve, followed by the configured post-roll. Duplicate entry events do not restart it. Boss kills and wipes remain markers within the same recording. You can stop it early using the recording controls; the usual inactivity timeout also applies.
+
+Delve difficulty 208 is identified by [LoggerHead's difficulty mapping](https://github.com/dratr/loggerhead/blob/master/LoggerHead.lua). This implementation uses the existing combat-log zone-event format and has synthetic coverage, but has not yet been validated with a real delve log. It does not use in-game add-on events such as `SCENARIO_COMPLETED` as though they were file events. A zone exit is saved with an unknown outcome, not a claimed completion. Tier, bountiful status and rewards are not available through this detection. Starting Companion or enabling logging after entry may miss the start; use **Record now** in that case.

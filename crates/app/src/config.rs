@@ -15,7 +15,51 @@ pub struct Installation {
     pub categories: Vec<Kind>,
     pub difficulties: Vec<u32>,
     pub minimum_key: u32,
+    #[serde(default)]
+    pub minimum_raid_difficulty: Option<RaidMinimum>,
 }
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RaidMinimum {
+    Normal,
+    Heroic,
+    Mythic,
+}
+impl Installation {
+    pub fn allows(&self, activity: &owc_domain::Activity) -> bool {
+        if !self.categories.contains(&activity.kind)
+            || (!self.difficulties.is_empty()
+                && activity
+                    .difficulty
+                    .is_some_and(|id| !self.difficulties.contains(&id)))
+        {
+            return false;
+        }
+        if activity.kind == Kind::MythicPlus
+            && activity.key_level.is_some_and(|key| key < self.minimum_key)
+        {
+            return false;
+        }
+        if activity.kind == Kind::Raid
+            && let Some(minimum) = self.minimum_raid_difficulty
+        {
+            let rank = match activity.difficulty {
+                Some(3 | 4 | 9 | 14) => 1,
+                Some(5 | 6 | 15) => 2,
+                Some(16) => 3,
+                _ => 0,
+            };
+            let required = match minimum {
+                RaidMinimum::Normal => 1,
+                RaidMinimum::Heroic => 2,
+                RaidMinimum::Mythic => 3,
+            };
+            return rank >= required;
+        }
+        true
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -122,6 +166,50 @@ impl Config {
 mod tests {
     use super::*;
     #[test]
+    fn automatic_filters_are_independent_and_old_preferences_survive() {
+        let mut config: Installation = serde_json::from_value(serde_json::json!({
+            "name":"Retail", "logs":".", "flavour":"retail",
+            "categories":["raid","mythic_plus"], "difficulties":[], "minimum_key":10
+        }))
+        .expect("old installation");
+        assert!(config.minimum_raid_difficulty.is_none());
+        let mut raid = owc_domain::Activity::new(Kind::Raid, "Raid".into(), 0, "Retail");
+        raid.difficulty = Some(17);
+        assert!(config.allows(&raid));
+        for (minimum, expected) in [
+            (RaidMinimum::Normal, [false, true, true, true]),
+            (RaidMinimum::Heroic, [false, false, true, true]),
+            (RaidMinimum::Mythic, [false, false, false, true]),
+        ] {
+            config.minimum_raid_difficulty = Some(minimum);
+            for (difficulty, allowed) in [17, 14, 15, 16].into_iter().zip(expected) {
+                raid.difficulty = Some(difficulty);
+                assert_eq!(config.allows(&raid), allowed);
+            }
+            raid.difficulty = None;
+            assert!(!config.allows(&raid));
+        }
+        let mut key = owc_domain::Activity::new(Kind::MythicPlus, "Key".into(), 0, "Retail");
+        key.key_level = Some(9);
+        assert!(!config.allows(&key));
+        key.key_level = Some(10);
+        assert!(config.allows(&key));
+        let mut delve = owc_domain::Activity::new(Kind::Delve, "Delve".into(), 0, "Retail");
+        delve.difficulty = Some(208);
+        assert!(!config.allows(&delve));
+        config.categories.push(Kind::Delve);
+        assert!(config.allows(&delve));
+        config.categories.retain(|kind| *kind != Kind::MythicPlus);
+        assert!(!config.allows(&key));
+        config.categories.retain(|kind| *kind != Kind::Raid);
+        raid.difficulty = Some(16);
+        assert!(!config.allows(&raid));
+        assert!(config.allows(&delve));
+        config.difficulties = vec![15];
+        assert!(!config.allows(&delve));
+    }
+
+    #[test]
     fn older_config_defaults_to_fast_cpu_exports() {
         let root = tempfile::tempdir().expect("root");
         let mut value = serde_json::to_value(Config::new(root.path())).expect("serialize");
@@ -153,6 +241,7 @@ mod tests {
                 categories: vec![],
                 difficulties: vec![],
                 minimum_key: 0,
+                minimum_raid_difficulty: None,
             });
         }
         config.validate().expect("different folders");

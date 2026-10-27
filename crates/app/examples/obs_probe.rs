@@ -221,6 +221,7 @@ async fn verify_engine(spool: &std::path::Path) -> Result<()> {
         categories: vec![owc_domain::Kind::Raid],
         difficulties: vec![],
         minimum_key: 0,
+        minimum_raid_difficulty: None,
     });
     send(&tx, json!({"action":"save_config", "config":config})).await?;
     send(

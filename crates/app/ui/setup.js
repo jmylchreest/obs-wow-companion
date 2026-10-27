@@ -157,7 +157,7 @@ $('wizard-logs').onsubmit=wizardRun(async()=>{
   if(!name||!logs)throw Error('Enter an installation name and its Logs directory.');
   const config=structuredClone(state.config);
   if(config.installations.some(i=>i.name===name))throw Error('That installation name already exists. Edit it in Setup or choose another name.');
-  config.installations.push({name,logs,flavour:$('wizard-flavour').value,minimum_key:0,difficulties:[],categories:kinds.filter(k=>k!=='manual')});
+  config.installations.push({name,logs,flavour:$('wizard-flavour').value,minimum_key:0,difficulties:[],categories:kinds.filter(k=>k!=='manual'&&k!=='delve')});
   await saveInstallations(config);$('wizard-log-path').value='';$('manual-installation').open=false;
 });
 $('wizard-manual-only').onchange=renderSetup;
@@ -216,7 +216,7 @@ function renderInstallations(){
     add.onclick=wizardRun(async()=>{
       const config=structuredClone(state.config);let name=candidate.name,index=2;
       while(config.installations.some(i=>i.name===name))name=`${candidate.name} (${index++})`;
-      config.installations.push({name,logs:candidate.logs,flavour:candidate.flavour,minimum_key:0,difficulties:[],categories:kinds.filter(k=>k!=='manual')});
+      config.installations.push({name,logs:candidate.logs,flavour:candidate.flavour,minimum_key:0,difficulties:[],categories:kinds.filter(k=>k!=='manual'&&k!=='delve')});
       await saveInstallations(config);
     });
     row.append(text,add);$('discovered-installations').append(row);

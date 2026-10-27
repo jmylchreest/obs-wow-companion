@@ -218,7 +218,7 @@ impl Detector {
         match e.kind() {
             "ENCOUNTER_START" if e.number(1).is_some() && e.number(3).is_some() => {
                 if let Some(a) = &mut self.active {
-                    if a.kind == Kind::MythicPlus {
+                    if matches!(a.kind, Kind::MythicPlus | Kind::Delve) {
                         a.marker(e.at, "boss_start", e.field(2).into());
                         return out;
                     }
@@ -247,7 +247,7 @@ impl Detector {
             }
             "ENCOUNTER_END" => {
                 if let Some(a) = &mut self.active {
-                    if a.kind == Kind::MythicPlus {
+                    if matches!(a.kind, Kind::MythicPlus | Kind::Delve) {
                         a.marker(
                             e.at,
                             "boss_end",
@@ -370,6 +370,34 @@ impl Detector {
             }
             "ZONE_CHANGE" => {
                 let zone = e.number(1);
+                let delve = self.flavour == Flavour::Retail && e.number(3) == Some(208);
+                if zone.is_some() && e.number(3).is_some() {
+                    if self
+                        .active
+                        .as_ref()
+                        .is_some_and(|a| a.kind == Kind::Delve && (a.zone != zone || !delve))
+                    {
+                        // A zone exit does not prove completion or failure.
+                        self.end(e.at, Outcome::Unknown, &mut out);
+                    }
+                    if delve && !e.field(2).is_empty() {
+                        if self
+                            .active
+                            .as_ref()
+                            .is_some_and(|a| a.kind == Kind::Delve || a.kind == Kind::Manual)
+                        {
+                            return out;
+                        }
+                        self.end(e.at, Outcome::Abandoned, &mut out);
+                        self.begin(Kind::Delve, e.field(2).into(), e.at);
+                        if let Some(a) = &mut self.active {
+                            a.zone = zone;
+                            a.difficulty = Some(208);
+                            a.warnings.push("Delve recorded between zone changes; tier and completion are not available".into());
+                        }
+                        return out;
+                    }
+                }
                 if let Some(activity) = &self.active
                     && activity.kind == Kind::MythicPlus
                     && let (Some(dungeon), Some(current)) = (activity.zone, zone)
@@ -429,7 +457,7 @@ impl Detector {
         if self
             .active
             .as_ref()
-            .is_some_and(|a| a.kind == Kind::MythicPlus)
+            .is_some_and(|a| matches!(a.kind, Kind::MythicPlus | Kind::Delve))
         {
             self.last_activity_ms
                 .or(self.last_event_ms)
@@ -602,6 +630,74 @@ mod tests {
         let lines = tailer.poll_sources(dir.path()).expect("truncated");
         assert_eq!(lines[0].offset, 0);
         assert_eq!(lines[0].text, "new");
+    }
+
+    #[test]
+    fn delve_zone_lifecycle_keeps_bosses_and_deaths_in_one_recording() {
+        let mut d = Detector::new("Retail".into(), Flavour::Retail);
+        d.ingest(&event(0, "ZONE_CHANGE,100,Test delve,208"));
+        let id = d.active.as_ref().expect("delve").id;
+        d.ingest(&event(100, "ZONE_CHANGE,100,Test delve,208"));
+        d.ingest(&event(200, "ENCOUNTER_START,1,Test boss,208,1"));
+        d.ingest(&event(
+            300,
+            "UNIT_DIED,0,nil,0x0,0x0,Player-1,Player,0x511,0x0,0",
+        ));
+        d.ingest(&event(400, "ENCOUNTER_END,1,Test boss,208,1,0"));
+        d.ingest(&event(500, "ENCOUNTER_START,1,Test boss,208,1"));
+        d.ingest(&event(600, "ENCOUNTER_END,1,Test boss,208,1,1"));
+        assert_eq!(d.active.as_ref().expect("still recording").id, id);
+        let finished = d.ingest(&event(700, "ZONE_CHANGE,1,World,0"));
+        assert_eq!(finished.len(), 1);
+        let a = &finished[0];
+        assert_eq!(a.kind, Kind::Delve);
+        assert_eq!(a.outcome, Outcome::Unknown);
+        assert_eq!(a.difficulty, Some(208));
+        assert_eq!(a.key_level, None);
+        assert_eq!(a.end_ms, Some(700));
+        assert_eq!(
+            a.markers
+                .iter()
+                .map(|m| m.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["boss_start", "death", "boss_end", "boss_start", "boss_end"]
+        );
+        assert!(d.active.is_none());
+    }
+
+    #[test]
+    fn delves_require_retail_and_valid_zone_and_preserve_manual_recordings() {
+        for flavour in [Flavour::Classic, Flavour::Era] {
+            let mut d = Detector::new("Other".into(), flavour);
+            d.ingest(&event(0, "ZONE_CHANGE,100,Test delve,208"));
+            assert!(d.active.is_none());
+        }
+        let mut d = Detector::new("Retail".into(), Flavour::Retail);
+        for line in [
+            "ZONE_CHANGE,bad,Test delve,208",
+            "ZONE_CHANGE,100,,208",
+            "ZONE_CHANGE,100,Dungeon,1",
+        ] {
+            d.ingest(&event(0, line));
+            assert!(d.active.is_none());
+        }
+        d.begin(Kind::Manual, "Manual".into(), 0);
+        let id = d.active.as_ref().expect("manual").id;
+        d.ingest(&event(1, "ZONE_CHANGE,100,Test delve,208"));
+        assert_eq!(d.active.as_ref().expect("manual").id, id);
+    }
+
+    #[test]
+    fn delve_zone_switch_and_inactivity_finish_without_inventing_success() {
+        let mut d = Detector::new("Retail".into(), Flavour::Retail);
+        d.ingest(&event(0, "ZONE_CHANGE,100,First delve,208"));
+        let finished = d.ingest(&event(100, "ZONE_CHANGE,101,Second delve,208"));
+        assert_eq!(finished[0].outcome, Outcome::Unknown);
+        assert_eq!(d.active.as_ref().expect("second").name, "Second delve");
+        // Repeated zone notifications must not keep an idle run alive indefinitely.
+        d.ingest(&event(200_000, "ZONE_CHANGE,101,Second delve,208"));
+        assert!(d.expire(300_099, 300_000).is_empty());
+        assert_eq!(d.expire(300_100, 300_000)[0].outcome, Outcome::Abandoned);
     }
 
     fn event(at: i64, text: &str) -> Event {

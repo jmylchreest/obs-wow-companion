@@ -1002,15 +1002,7 @@ impl Engine {
                 self.completed_events.push(activity);
                 continue;
             }
-            if !installation.categories.contains(&activity.kind)
-                || (!installation.difficulties.is_empty()
-                    && activity
-                        .difficulty
-                        .is_some_and(|difficulty| !installation.difficulties.contains(&difficulty)))
-                || activity
-                    .key_level
-                    .is_some_and(|key| key < installation.minimum_key)
-            {
+            if !installation.allows(&activity) {
                 continue;
             }
             if started {
@@ -3341,6 +3333,7 @@ mod tests {
             categories: vec![],
             difficulties: vec![],
             minimum_key: 0,
+            minimum_raid_difficulty: None,
         };
         engine.config.installations = vec![installation.clone()];
         engine
@@ -3502,6 +3495,7 @@ mod tests {
             Kind::Arena,
             Kind::SoloShuffle,
             Kind::Battleground,
+            Kind::Delve,
         ] {
             verify_stopped_activity(kind).await;
         }
@@ -3520,6 +3514,7 @@ mod tests {
             categories: vec![kind],
             difficulties: vec![],
             minimum_key: 0,
+            minimum_raid_difficulty: None,
         };
         let mut state = LogState::new(&installation);
         let mut activity = Activity::new(
@@ -3610,6 +3605,7 @@ mod tests {
             categories: vec![],
             difficulties: vec![],
             minimum_key: 0,
+            minimum_raid_difficulty: None,
         };
         let mut other = config.clone();
         other.id = Uuid::new_v4();

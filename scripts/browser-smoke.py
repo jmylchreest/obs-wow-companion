@@ -44,7 +44,7 @@ def driver(path, data=None, method=None):
     return response
 
 try:
-    display = launch(["Xvfb", ":123", "-screen", "0", "1440x1000x24", "-nolisten", "tcp"], "xvfb.log")
+    display = launch(["Xvfb", ":123", "-screen", "0", "1440x1600x24", "-nolisten", "tcp"], "xvfb.log")
     time.sleep(1)
     assert display.poll() is None
     launch([os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion"), "--no-open", "--data-dir", str(root / "data")], "app.log")
@@ -275,6 +275,30 @@ try:
         time.sleep(0.1)
         if js("return state.config.export_mode==='precise'&&state.config.media.encoder==='cpu'"): break
     assert js("return document.getElementById('vaapi-device-label').hidden") is True
+    assert js("""
+      installation();let card=document.getElementById('installations').lastElementChild;
+      const defaults=installationConfig(card),offByDefault=!defaults.categories.includes('delve');
+      const set=(key,value)=>{const input=card.querySelector(`[data-key="${key}"]`);input.value=value;input.dispatchEvent(new Event('change'));};
+      set('raid-mode','heroic');set('key-mode','minimum');set('minimum_key','17');set('delve-mode','on');
+      const chosen=installationConfig(card);card.remove();installation(chosen);card=document.getElementById('installations').lastElementChild;
+      const restored=installationConfig(card),roundtrip=restored.minimum_raid_difficulty==='heroic'&&restored.minimum_key===17&&restored.categories.includes('delve');
+      set('raid-mode','off');set('key-mode','off');set('delve-mode','off');
+      const disabled=installationConfig(card),allOff=['raid','mythic_plus','delve'].every(k=>!disabled.categories.includes(k));card.remove();
+      installation({name:'Legacy',logs:'.',flavour:'retail',categories:['raid'],difficulties:[15],minimum_key:0});card=document.getElementById('installations').lastElementChild;
+      const legacy=installationConfig(card).difficulties.join(',')==='15';set('raid-mode','normal');
+      const replaced=installationConfig(card).difficulties.length===0;card.remove();
+      return offByDefault&&roundtrip&&allOff&&legacy&&replaced;
+    """) is True, 'Automatic recording controls preserve and round-trip policies'
+    click('[data-settings-tab=obs]')
+    assert js("""
+      const input=document.getElementById('recording-scene').getBoundingClientRect(),button=document.getElementById('refresh-scenes').getBoundingClientRect();
+      return Math.abs(input.height-button.height)<1&&Math.abs(input.top-button.top)<1;
+    """) is True, 'Scene selector and Refresh share height and alignment'
+    (root/'aligned-obs-settings.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
+    click('[data-settings-tab=wow]')
+    (root/'compact-installations.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
+    click('[data-settings-tab=recording]')
+    (root/'compact-recording-settings.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
     click('#library-tab')
     click("#favourites-only")
     assert js("return document.getElementById('favourites-only').getAttribute('aria-pressed')") == "true"
@@ -417,12 +441,35 @@ try:
         assert js("return document.getElementById('playback-details').textContent.includes('video unchanged')&&document.getElementById('playback-details').textContent.includes('rejected')") is True
 
 
+    def player_pixels(name):
+        path=root/name
+        path.write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
+        bounds=js("const r=document.getElementById('player').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,viewport:innerWidth}")
+        probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_entries','stream=width','-of','json',str(path)]))
+        scale=probe['streams'][0]['width']/bounds['viewport']
+        x,y,w,h=[bounds[k]*scale for k in ['x','y','width','height']]
+        crop=f"crop={int(w*.6)}:{int(h*.4)}:{int(x+w*.2)}:{int(y+h*.2)}"
+        return subprocess.check_output(['ffmpeg','-v','error','-i',str(path),'-vf',crop,'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','-'])
     js("reviewPlayer.pause();reviewPlayer.currentTime(0.4);window.viewSource=reviewPlayer.currentSrc();window.viewLoads=0;reviewPlayer.on('loadstart',()=>window.viewLoads++)")
+    time.sleep(0.3)
+    before_tab_pixels=player_pixels('before-tab-video.png')
     click('#setup-tab')
     time.sleep(0.5)
+    assert js("""
+      const setup=document.getElementById('setup-view'),library=document.getElementById('library-view'),r=library.getBoundingClientRect();
+      const points=[[.5,.4],[.8,.6],[.8,.9],[.5,.98]];
+      return library.inert&&getComputedStyle(library).display!=='none'&&points.every(([x,y])=>setup.contains(document.elementFromPoint(r.x+r.width*x,r.y+r.height*y)));
+    """) is True, 'Settings covers the player controls, markers and footer'
+    (root/'settings-over-player.png').write_bytes(base64.b64decode(driver(prefix+'/screenshot')))
     click('#library-tab')
     time.sleep(0.5)
     assert js("return reviewPlayer.currentSrc()===window.viewSource&&reviewPlayer.readyState()>=2&&Math.abs(reviewPlayer.currentTime()-0.4)<0.1&&!reviewPlayer.el().classList.contains('playback-unavailable')&&window.viewLoads===0") is True, js("return {src:reviewPlayer.currentSrc(),ready:reviewPlayer.readyState(),time:reviewPlayer.currentTime(),loads:window.viewLoads,classes:reviewPlayer.el().className}")
+    pixels=player_pixels('returned-video-frame.png')
+    coloured=sum(max(pixels[i:i+3])-min(pixels[i:i+3])>80 for i in range(0,len(pixels),3))
+    assert coloured>len(pixels)/3*.1, 'Returned player visibly paints the video, not a black surface'
+    assert len(pixels)==len(before_tab_pixels)
+    difference=sum(abs(a-b) for a,b in zip(pixels,before_tab_pixels))/len(pixels)
+    assert difference<8, f'Returned paused frame changed or became corrupted: mean difference {difference}'
     js("reviewPlayer.playbackRate(0.5);reviewPlayer.play().catch(()=>{})")
     time.sleep(0.1)
     click('#setup-tab')
@@ -493,9 +540,9 @@ try:
     assert js("return reviewPlayer.currentTime()") == 0
     js("document.getElementById('tags').focus();window.beforeMute=reviewPlayer.muted();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'m',bubbles:true,cancelable:true}))")
     assert js("return reviewPlayer.muted()===beforeMute") is True
-    js("document.activeElement.blur();document.getElementById('library-view').hidden=true;playerKey('m')")
+    js("document.activeElement.blur();show('setup');playerKey('m')")
     assert js("return reviewPlayer.muted()===beforeMute") is True
-    js("document.getElementById('library-view').hidden=false")
+    js("show('library')")
     js("seekTo(0.5)")
     js("document.activeElement.blur();document.dispatchEvent(new KeyboardEvent('keydown',{key:'.',bubbles:true}))")
     assert abs(js("return document.getElementById('player').currentTime") - (0.5+1/30)) < 0.02
@@ -652,9 +699,29 @@ try:
     """) is True, 'Dynamic filters and independent scroll areas'
     assert js("""
       const a=reviewActivity(),original=a.markers;a.markers=Array.from({length:300},(_,n)=>({kind:'death',at_ms:a.start_ms+n,label:'Player '+n}));renderMarkers(a);
-      const scroll=document.querySelector('.death-scroll');scroll.scrollTop=200;const independent=scroll.scrollHeight>scroll.clientHeight&&scroll.scrollTop>0&&scroll.clientHeight<=220;
+      const scroll=document.querySelector('.death-scroll');scroll.scrollTop=200;const independent=scroll.scrollHeight>scroll.clientHeight&&scroll.scrollTop>0&&scroll.clientHeight>0;
       a.markers=original;renderMarkers(a);return independent;
     """) is True, 'Long death list scrolls within its section'
+    driver(prefix + '/window/rect', {'width':1280,'height':1400})
+    time.sleep(0.3)
+    assert js("""
+      const clip=document.getElementById('clip-options'),details=document.getElementById('video-details'),wasOpen=clip.open,wasDetailsOpen=details.open;
+      clip.open=false;details.open=false;
+      const scroll=document.querySelector('.death-scroll'),height=scroll.clientHeight;
+      const tools=document.getElementById('recording-tools'),footer=document.getElementById('labels-panel');
+      const pinned=Math.abs(tools.getBoundingClientRect().bottom-footer.getBoundingClientRect().top)<2;
+      clip.open=true;const shrinks=scroll.clientHeight<height;
+      clip.open=wasOpen;details.open=wasDetailsOpen;
+      return height>220&&pinned&&shrinks;
+    """) is True, 'Deaths use spare height and yield space to expanded export'
+    driver(prefix + '/window/rect', {'width':1280,'height':960})
+    assert js("""
+      const clip=document.getElementById('clip-options'),wasOpen=clip.open,browse=document.getElementById('browse-share'),wasHidden=browse.hidden;
+      clip.open=true;browse.hidden=false;
+      const aligned=(a,b)=>{const x=document.querySelector(a).getBoundingClientRect(),y=document.querySelector(b).getBoundingClientRect();return x.height>0&&Math.abs(x.height-y.height)<1&&Math.abs(x.top-y.top)<1;};
+      const result=aligned('#recording-tools #share-path','#browse-share')&&aligned('#select-range','#trim-start')&&aligned('#tags','#delete');
+      clip.open=wasOpen;browse.hidden=wasHidden;return result;
+    """) is True, 'Export and label actions align with adjacent inputs'
     # Hold a real child process so cancellation is exercised while media work is live.
     wrapper = root / 'held-ffmpeg.py'
     started = root / 'held-ffmpeg.pid'

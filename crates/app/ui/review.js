@@ -8,13 +8,14 @@ function recordingById(id){return (state.activities||[]).find(a=>a.id===id);}
 function reviewActivity(){return recordingById(selected)||(state.active||[]).find(a=>a.id===selected);}
 function recordingPrefix(a){
   if(a.kind==='manual')return '--';
+  if(a.kind==='delve')return 'DV';
   if(a.kind==='mythic_plus'&&Number.isInteger(a.key_level)&&a.key_level>0)return String(a.key_level).padStart(2,' ');
   if(a.kind==='raid')return ({14:'NM',15:'HC',16:' M',17:'RF'})[a.difficulty]||'  ';
   return '  ';
 }
 function renderRecordingTitle(element,a){
   element.classList.add('recording-heading');
-  const prefix=document.createElement('span');prefix.className='recording-prefix '+(a.kind==='mythic_plus'?'key':a.kind==='manual'?'manual':a.kind==='raid'?({14:'normal',15:'heroic',16:'mythic',17:'raid-finder'})[a.difficulty]||'unknown':'unknown');prefix.textContent=recordingPrefix(a);
+  const prefix=document.createElement('span');prefix.className='recording-prefix '+(a.kind==='mythic_plus'?'key':a.kind==='manual'?'manual':a.kind==='delve'?'delve':a.kind==='raid'?({14:'normal',15:'heroic',16:'mythic',17:'raid-finder'})[a.difficulty]||'unknown':'unknown');prefix.textContent=recordingPrefix(a);
   const name=document.createElement('span');name.className='recording-name';name.textContent=a.name;
   element.replaceChildren(prefix,name);
 }
@@ -48,7 +49,7 @@ function updateRecordingFilters(){
   options('outcome-filter',[...new Set(all.map(a=>a.outcome).filter(Boolean))].sort(),'All outcomes',label);
   const relevant=all.filter(a=>!$('kind-filter').value||a.kind===$('kind-filter').value);
   const difficulties=[...new Set(relevant.map(a=>a.difficulty).filter(v=>v!=null))].sort((a,b)=>a-b);
-  options('difficulty-filter',difficulties,'All difficulties',id=>({1:'Normal dungeon',2:'Heroic dungeon',8:'Mythic+',14:'Normal',15:'Heroic',16:'Mythic',17:'Raid Finder',23:'Mythic dungeon'})[id]||`Difficulty ${id}`);
+  options('difficulty-filter',difficulties,'All difficulties',id=>({1:'Normal dungeon',2:'Heroic dungeon',8:'Mythic+',14:'Normal',15:'Heroic',16:'Mythic',17:'Raid Finder',23:'Mythic dungeon',208:'Delve'})[id]||`Difficulty ${id}`);
   const keys=[...new Set(relevant.filter(a=>a.kind==='mythic_plus').map(a=>a.key_level).filter(v=>v>0))].sort((a,b)=>a-b);
   options('key-filter',keys,'All keys',key=>String(key));
   $('difficulty-filter').hidden=!difficulties.length;$('key-filter').hidden=!keys.length;
@@ -56,7 +57,7 @@ function updateRecordingFilters(){
 function renderList(){
   updateRecordingFilters();
   const query=searchText($('search').value.trim());
-  let all=[...(state.active||[]).map(a=>({...a,status:(state.ownership==='managed'||state.ownership==='observed')&&((state.recording_activity_ids||[]).includes(a.id)||a.kind==='manual')?'recording':'active'})),...(state.activities||[])].filter(a=>($('favourites-only').getAttribute('aria-pressed')!=='true'||(a.tags||[]).includes('favourite'))&&(!$('kind-filter').value||a.kind===$('kind-filter').value)&&(!$('outcome-filter').value||a.outcome===$('outcome-filter').value)&&(!$('difficulty-filter').value||a.difficulty===Number($('difficulty-filter').value))&&(!$('key-filter').value||a.key_level===Number($('key-filter').value))&&recordingDateMatches(a)&&[a.name,a.character,a.installation,new Date(a.start_ms).toLocaleString(),...(a.tags||[])].map(searchText).join(' ').includes(query));
+  let all=[...(state.active||[]).map(a=>({...a,status:(state.ownership==='managed'||state.ownership==='observed')&&((state.recording_activity_ids||[]).includes(a.id)||a.kind==='manual')?'recording':'active'})),...(state.activities||[])].filter(a=>($('favourites-only').getAttribute('aria-pressed')!=='true'||(a.tags||[]).includes('favourite'))&&($('protected-only').getAttribute('aria-pressed')!=='true'||a.protected)&&(!$('kind-filter').value||a.kind===$('kind-filter').value)&&(!$('outcome-filter').value||a.outcome===$('outcome-filter').value)&&(!$('difficulty-filter').value||a.difficulty===Number($('difficulty-filter').value))&&(!$('key-filter').value||a.key_level===Number($('key-filter').value))&&recordingDateMatches(a)&&[a.name,a.character,a.installation,new Date(a.start_ms).toLocaleString(),...(a.tags||[])].map(searchText).join(' ').includes(query));
   const byTime=(a,b)=>Number(a.start_ms)-Number(b.start_ms)||String(a.id).localeCompare(String(b.id));
   all.sort($('sort').value==='name'?(a,b)=>a.name.localeCompare(b.name)||byTime(b,a):$('sort').value==='old'?byTime:(a,b)=>byTime(b,a));
   $('result-count').textContent=String(all.length);$('recordings').replaceChildren();
@@ -338,7 +339,7 @@ window.folderOpened=({error:message})=>{if(message)error(new Error(message));};
 document.addEventListener('keydown',async event=>{
   const target=event.target instanceof Element?event.target:document.activeElement;
   if(event.defaultPrevented||event.isComposing||event.ctrlKey||event.altKey||event.metaKey||
-    $('library-view').hidden||document.querySelector('dialog[open]')||
+    $('library-view').inert||document.querySelector('dialog[open]')||
     target?.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"])')||
     reviewPlayer.el().classList.contains('playback-unavailable'))return;
   const key=event.key.toLowerCase(),inside=reviewPlayer.el().contains(target);

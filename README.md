@@ -59,7 +59,7 @@ A fresh supported encounter starts recording automatically. After it finishes, C
 | Can I keep streaming? | Companion leaves streaming alone. Recording uses OBS's program output; it does not create a separate game-only recording composition. |
 | What if I close OBS? | Companion reconnects automatically. Interrupted footage can be unavailable; the encounter is kept with a warning. |
 | Do I need to wait before quitting? | No. Quit stops owned capture and preserves unfinished automatic clips for processing next launch. Interrupted sharing ZIP exports need retrying. |
-| What game modes work? | Coverage varies by version and mode. The first-release scope includes raids, Mythic+, arenas, Solo Shuffle, battlegrounds and Classic. See the [tested compatibility matrix](docs/compatibility.md). |
+| What game modes work? | Coverage varies by version and mode. The first-release scope includes raids, Mythic+, arenas, Solo Shuffle, battlegrounds and Classic, with experimental Retail delve recording. See the [tested compatibility matrix](docs/compatibility.md). |
 | Are recordings uploaded anywhere? | No automatic uploads. Recordings stay on your machine. Exporting and sharing are your choice. |
 | Is macOS supported? | Not in the first release. Windows x86-64 and Linux x86-64 are the release targets. |
 

@@ -48,6 +48,7 @@ fn audio_title(stream: &Value) -> String {
             .filter(|value| !value.is_empty())
     };
     tag("title")
+        .or_else(|| tag("name"))
         .or_else(|| {
             tag("handler_name").filter(|name| {
                 !["SoundHandler", "AudioHandler", "OBS Audio Handler"]
@@ -1075,6 +1076,29 @@ mod tests {
         inputs[1].stream_layout[0]["width"] = serde_json::json!(999);
         assert!(direct_copy_compatible(&plan, &inputs).is_err());
     }
+    #[test]
+    fn audio_titles_read_obs_track_names() {
+        for (key, name) in [
+            ("NAME", "Full Mix"),
+            ("name", "Game"),
+            ("Name", "Mic"),
+            ("NAME", "Chat"),
+        ] {
+            let stream = serde_json::json!({"tags":{key:name,"HANDLER_NAME":"OBS Audio Handler"}});
+            assert_eq!(audio_title(&stream), name);
+        }
+        assert_eq!(
+            audio_title(&serde_json::json!({"tags":{"title":" ","NAME":" Game "}})),
+            "Game"
+        );
+        assert_eq!(
+            audio_title(
+                &serde_json::json!({"tags":{"TITLE":"Edited title","NAME":"Original name"}})
+            ),
+            "Edited title"
+        );
+    }
+
     #[test]
     fn audio_titles_ignore_container_handlers_and_preserve_real_names() {
         for handler in ["SoundHandler", "AudioHandler", "OBS Audio Handler"] {
