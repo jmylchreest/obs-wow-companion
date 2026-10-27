@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Use Ruby Life Pools footage for the public screenshots and demo, matching the selected recording.
+
 ## 0.1.0-dev.1 — 2026-10-27
 
 ### Changed

@@ -70,7 +70,7 @@ try:
             "-c:a","aac","-metadata:s:a:0","title=Game","-metadata:s:a:1","title=Voice",str(source)],check=True)
     start = 1792944000000
     records = [
-        ("Ruby Life Pools","mythic_plus",20,"success",2,["Weekly keys","Review"]),
+        ("Ruby Life Pools","mythic_plus",17,"success",1,["Weekly keys","Review"]),
         ("Den of Nalorakk","mythic_plus",21,"success",0,["Practice"]),
         ("Kith'ix","raid",15,"success",None,["Raid night"]),
         ("Kith'ix","raid",15,"failure",None,["Raid night"]),
