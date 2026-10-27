@@ -13,6 +13,13 @@ ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
 class ReleaseTests(unittest.TestCase):
+    def test_composite_steps_use_supported_timeout_mechanism(self):
+        action = yaml.safe_load(Path(".github/actions/build-environment/action.yml").read_text(encoding="utf-8"))
+        for step in action["runs"]["steps"]:
+            self.assertNotIn("timeout-minutes", step)
+        dependencies = next(step for step in action["runs"]["steps"] if step.get("name") == "Linux dependencies")
+        self.assertIn("timeout 420s apt-get", dependencies["run"])
+
     def test_version_tag_is_exact_and_not_shell_text(self):
         self.assertEqual(ci.release_tag("v" + ci.version()), "v" + ci.version())
         for tag in ["v9.9.9", "main", "v" + ci.version() + ";echo bad"]:
