@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
+mod telemetry;
 #[derive(Parser)]
 #[command(
     version,
@@ -9,6 +10,10 @@ use std::path::PathBuf;
 struct Args {
     #[arg(long)]
     data_dir: Option<PathBuf>,
+    /// Write timing spans to a local Chrome/Perfetto trace (profiling builds only).
+    #[cfg(feature = "profiling")]
+    #[arg(long)]
+    profile_trace: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
     port: u16,
     /// Run without a desktop window or opening the browser.
@@ -19,12 +24,11 @@ struct Args {
     browser: bool,
 }
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
     let args = Args::parse();
+    #[cfg(feature = "profiling")]
+    let _trace = telemetry::initialise(args.profile_trace.as_deref())?;
+    #[cfg(not(feature = "profiling"))]
+    telemetry::initialise()?;
     let root = args.data_dir.unwrap_or(
         directories_next::ProjectDirs::from("org", "obs-wow-companion", "OBS WoW Companion")
             .context("cannot locate application data directory; use --data-dir")?
@@ -131,7 +135,11 @@ fn desktop(
         *control = ControlFlow::Wait;
         if let Event::UserEvent(event) = event {
             match event {
-                DesktopEvent::Quit => *control = ControlFlow::Exit,
+                DesktopEvent::Quit => {
+                    #[cfg(feature = "profiling")]
+                    telemetry::flush();
+                    *control = ControlFlow::Exit;
+                }
                 DesktopEvent::FolderOpened { error } => {
                     let payload = serde_json::json!({"error":error});
                     if let Err(error) = view.evaluate_script(&format!("window.folderOpened?.({payload})")) {

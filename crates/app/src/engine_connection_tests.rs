@@ -78,6 +78,9 @@ fn engine(root: &std::path::Path, port: u16) -> Engine {
     let (status, _) = watch::channel(json!({}));
     let mut engine = Engine::new(root.to_owned(), tx, status).expect("engine");
     engine.config.obs_port = port;
+    // Connection/ownership fixtures do not need detached media-tool readiness children.
+    engine.config.media.ffmpeg = root.join("missing-fixture-ffmpeg");
+    engine.config.media.ffprobe = root.join("missing-fixture-ffprobe");
     engine
 }
 #[tokio::test]
@@ -766,6 +769,7 @@ async fn native_obs_reconnect_keeps_owned_fragment_and_closes_it() {
         .expect("port");
     let root = tempfile::tempdir().expect("root");
     let mut engine = engine(root.path(), port);
+    engine.config.media = owc_media::Media::default();
     engine
         .command(json!({"action":"connect","password":"owc-isolated-test"}))
         .await

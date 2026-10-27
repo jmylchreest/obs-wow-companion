@@ -9,7 +9,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+profiling = ["dep:tracing"]
+
 [dependencies]
+tracing = { workspace = true, optional = true }
 anyhow.workspace = true
 serde_json.workspace = true
 rusqlite.workspace = true
@@ -17,3 +21,9 @@ owc-domain = { path = "../domain" }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+criterion.workspace = true
+
+[[bench]]
+name = "library"
+harness = false

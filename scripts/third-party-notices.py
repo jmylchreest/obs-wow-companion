@@ -9,7 +9,7 @@ import sys
 root = Path(__file__).resolve().parent.parent
 metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root))
 included = set()
-for target in ("x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"):
+for target in ("x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"):
     graph = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1", "--filter-platform", target], cwd=root))
     nodes = {n["id"]: n for n in graph["resolve"]["nodes"]}
     queue = [p["id"] for p in graph["packages"] if p["name"] == "owc-app"]
@@ -26,7 +26,7 @@ missing = []
 upstream = root / "licenses/upstream"
 fallbacks = json.loads((upstream / "manifest.json").read_text(encoding="utf-8"))
 for package in sorted(metadata["packages"], key=lambda p:(p["name"],p["version"])):
-    if package["source"] is None or package["id"] not in included:
+    if (package["source"] is None and not Path(package["manifest_path"]).is_relative_to(root / "vendor")) or package["id"] not in included:
         continue
     directory = Path(package["manifest_path"]).parent
     licenses = []

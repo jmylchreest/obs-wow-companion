@@ -63,11 +63,18 @@ impl Library {
         self.db.execute("INSERT INTO settings VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",params![key,value.to_string()])?;
         Ok(())
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile", name = "library.checkpoint")
+    )]
     pub fn checkpoint(&mut self, key: &str, state: &Value, activities: &[Activity]) -> Result<()> {
         let tx = self.db.transaction()?;
         tx.execute("INSERT INTO settings VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",params![key,state.to_string()])?;
-        for a in activities {
-            tx.execute("INSERT INTO activities(id,data) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET data=excluded.data",params![a.id.to_string(),serde_json::to_string(a)?])?;
+        {
+            let mut insert = tx.prepare("INSERT INTO activities(id,data) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET data=excluded.data")?;
+            for a in activities {
+                insert.execute(params![a.id.to_string(), serde_json::to_string(a)?])?;
+            }
         }
         tx.commit()?;
         Ok(())
@@ -95,6 +102,10 @@ impl Library {
         self.db.execute("INSERT INTO latest_bundles(id,data) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET data=excluded.data", params![id,details.to_string()])?;
         Ok(())
     }
+    #[cfg_attr(
+        feature = "profiling",
+        tracing::instrument(skip_all, target = "owc_profile", name = "library.list")
+    )]
     pub fn list(&self) -> Result<Vec<Value>> {
         let mut st=self.db.prepare("SELECT data,status,path,error,protected,tags,audio_tracks,origin_ms,(SELECT data FROM latest_bundles b WHERE b.id=activities.id) FROM activities ORDER BY json_extract(data,'$.start_ms') DESC")?;
         let rows = st.query_map([], |r| {

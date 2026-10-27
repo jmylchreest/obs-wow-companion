@@ -1,8 +1,9 @@
 [graph]
-targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"]
 all-features = true
 
 [advisories]
+unsound = "all"
 ignore = [
   { id = "RUSTSEC-2024-0370", reason = "Build-time proc-macro-error 1.0.4 via gtk3-macros/glib-macros required by Tao/Wry. No fixed compatible GTK3 dependency; review on desktop stack updates. No known vulnerability in this maintenance advisory." },
 ]

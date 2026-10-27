@@ -16,7 +16,7 @@ Reviewed 27 October 2026. The public `0.1.0-dev.1` preview passed all automated 
 | UI and public site | Isolated WebKit interaction, paused-frame tab return, large lists, control geometry and desktop/mobile site checks passed | Native GPU/desktop combinations can differ |
 | Real footage recovery | Two reported runs recovered from a read-only backup and copied sources using normal APIs | Personal media and logs are not public fixtures |
 
-The [release audit](release-audit.md) lists remaining gates. The [player compatibility page](../site/guide/compatibility.html) is the public support statement. Dated commands, earlier failures and local evidence locations are retained in the [historical journal](archive/validation-2026-10.md).
+The [release audit](release-audit.md) lists remaining gates. The [player compatibility page](../site/guide/compatibility.html) is the public support statement. Older validation diaries remain in Git history.
 
 ## Reproduce checks
 
@@ -24,8 +24,8 @@ Install the build dependencies in [development](development.md), then run:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo nextest run --workspace --locked --profile ci
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo nextest run --workspace --all-features --locked --profile ci
 cargo test --workspace --doc --locked
 python3 scripts/check-docs.py
 python3 -m unittest discover -s scripts -p 'test_*.py'
@@ -40,7 +40,7 @@ python3 scripts/private-session.py python3 scripts/browser-smoke.py
 python3 scripts/private-session.py python3 scripts/site-smoke.py
 ```
 
-For the OBS probe, build `cargo build -p owc-app --example obs_probe --locked`, then run `python3 scripts/private-session.py python3 scripts/isolated-obs.py`. It requires OBS, FFmpeg, Xvfb and WebKitWebDriver. Credential, disk-full and reconnect probes are opt-in; consult their script headers and the historical journal for the required isolated environment.
+For the OBS probe, build `cargo build -p owc-app --example obs_probe --locked`, then run `python3 scripts/private-session.py python3 scripts/isolated-obs.py`. It requires OBS, FFmpeg, Xvfb and WebKitWebDriver. Credential, disk-full and reconnect probes are opt-in; consult their script headers for the required isolated environment.
 
 Package and installer checks are defined in [CI](ci.md). Set `OWC_BINARY` to an extracted binary to test that exact package. A successful source build alone is not package validation. Preserve test reports and record the commit, OS/desktop, OBS version, media settings and WoW client build when adding gameplay evidence.
 

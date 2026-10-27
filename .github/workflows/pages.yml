@@ -21,11 +21,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
-      - uses: actions/upload-pages-artifact@5f327015a708106f6f1b7c9a633901af30fe80cb
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
           path: site
       - name: Deploy

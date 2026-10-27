@@ -15,7 +15,11 @@ import urllib.request
 root = Path(tempfile.mkdtemp(prefix="owc-service-"))
 binary = os.environ.get("OWC_BINARY", "target/debug/obs-wow-companion")
 with (root / "app.log").open("w") as log:
-    app = subprocess.Popen([binary, "--no-open", "--data-dir", str(root / "data")], stdout=log, stderr=log)
+    arguments = [binary, "--no-open", "--data-dir", str(root / "data")]
+    trace = root / "profile.json"
+    if os.environ.get("OWC_TEST_PROFILING") == "1":
+        arguments.extend(["--profile-trace", str(trace)])
+    app = subprocess.Popen(arguments, stdout=log, stderr=log)
     try:
         url = None
         for _ in range(100):
@@ -64,6 +68,12 @@ with (root / "app.log").open("w") as log:
         action({"action":"quit"})
         assert app.wait(timeout=10) == 0
         events.close()
+        if os.environ.get("OWC_TEST_PROFILING") == "1":
+            timings = json.loads(trace.read_text(encoding="utf-8"))
+            spans = [event for event in timings if event.get("ph") in ("B", "E", "X")]
+            assert any(event.get("name") == "snapshot" for event in spans), timings
+            assert all(not event.get("args") for event in spans), "Trace must not include arguments"
+            assert "/session/" not in trace.read_text(encoding="utf-8"), "Private URL leaked into trace"
         (root / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(f"Packaged service authentication, two-track media and shutdown passed: {root}")
     finally:

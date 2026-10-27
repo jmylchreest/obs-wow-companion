@@ -1,18 +1,30 @@
 //! Passwords live only in the OS credential store, never in app settings.
 use anyhow::{Result, anyhow};
-use keyring::Entry;
+use keyring_core::{Entry, api::CredentialStoreApi};
 
 fn entry(scope: &str, port: u16) -> Result<Entry> {
-    Entry::new(
-        "org.obs-wow-companion.obs",
-        &format!("{scope}:127.0.0.1:{port}"),
-    )
-    .map_err(|_| anyhow!("Could not access the system password store."))
+    // Construct the store on each attempt: an unavailable bus at startup must not
+    // become a cached failure for the remainder of this process.
+    #[cfg(target_os = "linux")]
+    let store = dbus_secret_service_keyring_store::Store::new();
+    #[cfg(target_os = "windows")]
+    let store = windows_native_keyring_store::Store::new();
+    #[cfg(target_os = "macos")]
+    let store = apple_native_keyring_store::keychain::Store::new();
+    store
+        .and_then(|store| {
+            store.build(
+                "org.obs-wow-companion.obs",
+                &format!("{scope}:127.0.0.1:{port}"),
+                None,
+            )
+        })
+        .map_err(|_| anyhow!("Could not access the system password store."))
 }
 pub async fn read(scope: String, port: u16) -> Result<Option<String>> {
     tokio::task::spawn_blocking(move || match entry(&scope, port)?.get_password() {
         Ok(password) => Ok(Some(password)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
         Err(_) => Err(anyhow!("Unlock your system password store, or enter the OBS password to connect for this session.")),
     }).await.map_err(|_| anyhow!("Password-store task failed."))?
 }
@@ -23,7 +35,7 @@ pub async fn save(scope: String, port: u16, password: String) -> Result<()> {
 }
 pub async fn forget(scope: String, port: u16) -> Result<()> {
     tokio::task::spawn_blocking(move || match entry(&scope, port)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
         Err(_) => Err(anyhow!(
             "Could not remove the saved password. Unlock your system password store and try again."
         )),
