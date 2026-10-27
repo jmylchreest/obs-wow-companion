@@ -14,3 +14,5 @@ The script uses a private Xvfb/WebKit session, a disposable library and fictiona
 The current public assets use a real Ruby Life Pools +17 excerpt (Kokia Blazehoof), provided with permission on 27 October 2026. The source was cropped, broadly softened to obscure floating player names, and muted. This is labelled in the video and public copy. The selected dungeon and key level match the source footage. Other library entries, characters, markers and labels are demonstration data. No original footage, private combat logs or user configuration is included.
 
 Review the video and screenshots before publishing replacements. Run `python3 scripts/private-session.py python3 scripts/site-smoke.py` to render desktop/mobile views and check local resources.
+
+Captures refresh content-based version parameters on image and video URLs so returning visitors fetch changed media instead of a cached copy.

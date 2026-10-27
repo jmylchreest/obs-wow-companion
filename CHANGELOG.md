@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Version public image and video URLs after captures so returning visitors receive the updated footage.
+
 - Use Ruby Life Pools footage for the public screenshots and demo, matching the selected recording.
 
 ## 0.1.0-dev.1 — 2026-10-27

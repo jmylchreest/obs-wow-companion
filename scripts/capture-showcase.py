@@ -2,6 +2,7 @@
 """Capture the actual app with reviewed media and fictional public demo data."""
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -144,6 +145,14 @@ try:
     time.sleep(5)
     js("document.getElementById('clip-options').open=false;document.querySelector('.review-scroll').scrollTop=0;reviewPlayer.userActive(true)")
     capture.wait(timeout=20)
+    # Changed media needs a new URL so existing visitors do not reuse cached footage.
+    page = Path("site/index.html")
+    def version_asset(match):
+        name = match.group(1)
+        digest = hashlib.sha256((Path("site") / name).read_bytes()).hexdigest()[:12]
+        return name + "?v=" + digest
+    page.write_text(re.sub(r"(assets/[\w-]+\.(?:png|mp4))(?:\?v=[a-f0-9]+)?",
+                           version_asset, page.read_text(encoding="utf-8")), encoding="utf-8")
     driver(prefix,method="DELETE")
     print(f"Public screenshots and recording: {assets}; private evidence: {root}")
 finally:
