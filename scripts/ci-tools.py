@@ -102,7 +102,10 @@ def bundle(directory):
     metadata = {"schema_version": 1, "version": version(), "tag": "v" + version(), "files": digests}
     (destination / "bundle.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     (destination / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in sorted(digests.items())), encoding="utf-8")
-    (destination / "release-notes.md").write_text(Path("CHANGELOG.md").read_text(encoding="utf-8"), encoding="utf-8")
+    notes = Path("docs/releases") / (version() + ".md")
+    if not notes.is_file():
+        notes = Path("CHANGELOG.md")
+    (destination / "release-notes.md").write_text(notes.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"Verified both platform archives and installers: {destination}")
 
 def publish(directory, tag):

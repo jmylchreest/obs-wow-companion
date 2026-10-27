@@ -1,0 +1,35 @@
+name: Share a test result
+description: Tell us which setup you tried and what worked.
+title: "[Testing] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A report that everything worked is useful too. Please describe the actual setup you used; a successful build alone does not confirm gameplay capture.
+  - type: input
+    id: build
+    attributes:
+      label: Companion version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Operating system, desktop/session, OBS version, encoder, recording format, audio tracks and WoW version.
+    validations:
+      required: true
+  - type: textarea
+    id: activities
+    attributes:
+      label: What did you try?
+      description: For example, consecutive raid pulls, a completed key, leaving a dungeon, restarting OBS, playback or exporting a player bundle.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What worked, and what did not?
+      description: Were the start, end, death markers and sound in the right place? Please do not upload personal footage or combat logs without checking them first.
+    validations:
+      required: true

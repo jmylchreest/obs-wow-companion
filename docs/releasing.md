@@ -16,12 +16,18 @@ On Ubuntu 24.04, build dependencies are `libgtk-3-dev libwebkit2gtk-4.1-dev libd
 
 Use [release-plz](https://release-plz.dev/docs/config) to prepare version/changelog changes in a clean committed checkout. Its configuration disables registry publication, tag creation and GitHub release creation; cargo-dist owns binary distribution. Review the root CHANGELOG and keep workspace versions together.
 
-Before tagging, finish the validation matrix, verify native imports preserve existing OBS profiles, test both platform artifacts, and review third-party license notices. The explicit release workflow requires successful tag validation, quality checks and a complete verified package bundle. Remote CI was first triggered on 2026-10-26. Inspect the current run results before releasing; a triggered run is not a passing gate.
+Before tagging a stable release, finish the validation matrix, verify native imports preserve existing OBS profiles, test both platform artifacts, and review third-party license notices. The explicit release workflow requires successful tag validation, quality checks and a complete verified package bundle. Remote CI was first triggered on 2026-10-26. Inspect the current run results before releasing; a triggered run is not a passing gate.
 
-Pushing a `v` tag matching the workspace version invokes the release workflow, which uses cargo-dist artifacts and publishes only after all prerequisites succeed. Preparing files locally does not push a tag or publish a release. No release has been published by this implementation task.
+Pushing a `v` tag matching the workspace version invokes the release workflow, which uses cargo-dist artifacts and publishes only after all prerequisites succeed. Preparing files locally does not push a tag or publish a release. Prereleases are published with GitHub’s prerelease flag and must describe the outstanding validation clearly.
 
 Workflows are maintained explicitly; do not overwrite them with `dist generate`. The narrow `allow-dirty = ["ci"]` setting permits custom orchestration while cargo-dist still builds packages/installers. It does not relax tests or checksums. Update immutable action pins in the workflow/composite files and keep matching cargo-dist metadata pins consistent. See [CI operation](ci.md) for triggers, artifacts and activation.
 
 ## Dependency policy
 
 The lockfile fixes the dependency graph. cargo-deny checks the actual Linux/Windows targets, rejects unknown registries and licenses outside the allowlist, and checks advisories. The single maintenance exception documents `proc-macro-error` through GTK3 build macros; revisit it when updating Tao/Wry. Duplicated transitive major versions remain warnings. Dependencies for excluded platforms are not part of the advertised support policy.
+
+## Development preview gate
+
+A development preview may invite testing of combinations which have not completed the stable-release gameplay matrix. It must still pass all automated quality, native package, service/media, desktop, browser, crash-recovery and installer checks for both advertised platforms. Keep experimental modes and untested desktop/game combinations visible in the compatibility table and release notes. A green build does not turn a preview into a stable release.
+
+Review public screenshots and demo footage for chat, player names, voice audio, local paths and session links before publishing. Do not package private logs or a live library. Preview release notes belong in `docs/releases/<version>.md`; the canonical change history remains CHANGELOG.md.

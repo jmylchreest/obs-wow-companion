@@ -969,3 +969,12 @@ and after the complete run. Workflow lint and all seven CI policy tests pass.
 - An isolated SQLite backup and timestamp-preserving copy of the Oct 26 source MP4 recovered both the Temple +20 and Blinding Vale +21 recordings through the normal app API and fast export worker. Both reached ready after media validation. Source size and modification timestamp remained unchanged; the live database was not edited. Local evidence: `/tmp/owc-source-recovery-z091ppb4/result.json`. Personal footage is not committed.
 - Recovery tests cover empty folders, uncertain source timing, persisted unrecoverable results, retry, idempotent reconciliation and preservation of unowned files.
 - “Unrecoverable” is scoped to footage available in the checked recording folder. Metadata remains available and a user can restore missing files and check again. Offline OBS, unverified timing and failed exports stay retryable.
+
+
+## Public preview candidate (2026-10-27)
+
+Commit `f2101a1` includes the review/settings layout, protected recording filter, audio-name metadata handling, per-installation automatic-recording thresholds and experimental delve detection. Focused application/parser nextest passed 81 tests with five opt-in skips; strict workspace Clippy passed. The isolated WebKit suite passed with before/after video pixel comparisons when switching tabs, Settings hit-testing over player controls, long-list layout and matching adjacent control heights. This does not establish correctness on every native GPU/desktop.
+
+Remote [run 40501052235](https://github.com/jmylchreest/obs-wow-companion/actions/runs/40501052235) passed Linux and Windows quality checks and the native Windows package service, media, desktop and crash-recovery checks. Linux packaging stopped during dependency downloads; bundle and installer checks were therefore not reached. The following candidate changes the slow Ubuntu mirror and keeps bounded download timeouts. Final candidate package and installer results must be recorded before a preview is published.
+
+Public screenshots use isolated fictional library data. The authorised real-gameplay excerpt is cropped, softened to obscure floating player names, and stripped of original audio. No live library or OBS configuration was modified for the capture.

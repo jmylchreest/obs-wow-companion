@@ -84,6 +84,12 @@ class ReleaseTests(unittest.TestCase):
                 (directory/"source.tar.gz.sha256").write_text(ci.checksum(directory/"source.tar.gz"), encoding="utf-8")
                 ci.bundle(directory)
                 output = Path("target/release-bundle")
+                self.assertEqual((output/"release-notes.md").read_text(), "Fixture release notes")
+                notes = Path("docs/releases/0.1.0-dev.1.md")
+                notes.parent.mkdir(parents=True)
+                notes.write_text("Player-facing preview notes", encoding="utf-8")
+                ci.bundle(directory)
+                self.assertEqual((output/"release-notes.md").read_text(), "Player-facing preview notes")
                 with patch.object(ci.subprocess, "run") as run:
                     ci.publish(output, "v0.1.0-dev.1")
                     command = run.call_args.args[0]

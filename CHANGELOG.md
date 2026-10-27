@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0-dev.1 — 2026-10-27
+
 ### Changed
 
 - Match adjacent buttons and inputs in Settings, export controls, marker entry, the events toolbar and the labels footer.
@@ -75,6 +77,8 @@
 - Retain combat-log checkpoint acknowledgements after database write failures and retry automatically, saving pending encounters with the cursor before allowing watchers to advance.
 
 ### Added
+
+- Add a player-focused quick start, testing and bug-report forms, preview release notes and refreshed public screenshots with a privacy-obscured gameplay demo.
 
 - Add experimental Retail delve recording from zone entry to exit, with death and boss markers, a Delves filter and a DV title prefix. Existing installations can enable it in Activity filters; tier and completion are not inferred.
 

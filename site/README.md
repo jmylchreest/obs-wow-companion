@@ -7,10 +7,10 @@ The public URL is https://jmylchreest.github.io/obs-wow-companion/.
 
 ## Captures
 
-Run `python3 scripts/capture-showcase.py` after building the app.
-It uses isolated Xvfb/WebKit sessions, generated silent video and fictional encounter data.
-It never opens the user's library or OBS configuration. Screenshots show the real application.
-`review-demo.mp4` demonstrates playback, seeking and half speed.
-Do not replace these with private recordings or logs without permission.
+Build the app, then run `python3 scripts/private-session.py python3 scripts/capture-showcase.py` for generated test footage, or add `--sanitised-video /path/to/reviewed-demo.mp4` for an already reviewed, silent 30-second clip with two muted audio streams.
 
-Run `python3 scripts/site-smoke.py` to render desktop/mobile views and check local resources.
+The script uses a private Xvfb/WebKit session, a disposable library and fictional encounter data. It does not read the live library or change OBS. `review-demo.mp4` shows playback, a death jump, half speed and selecting an export range.
+
+The current public assets use a real gameplay excerpt provided with permission on 27 October 2026. The source was cropped, broadly softened to obscure floating player names, and muted. This is labelled in the video and public copy. Library names, characters, markers and labels are demonstration data. No original footage, private combat logs or user configuration is included.
+
+Review the video and screenshots before publishing replacements. Run `python3 scripts/private-session.py python3 scripts/site-smoke.py` to render desktop/mobile views and check local resources.

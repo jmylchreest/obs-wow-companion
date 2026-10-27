@@ -72,3 +72,10 @@ This is a source review, not a completed localization migration. Implement the f
 - Test singular/plural/zero counts, decimal-comma locale, composed/decomposed Unicode search, long translations and RTL.
 - Test UTC/local boundaries, New Year, DST repeated/skipped hours and recovery on a machine with a different timezone.
 - Preserve backward compatibility for database/sidecar codes and user-authored text.
+
+
+## Early testing preview — 27 October 2026
+
+The user authorised a labelled development preview while broader stable-release qualification continues. Player-facing quick start, report forms, release notes and a GitHub invitation draft are prepared; Reddit talking points are provided for the author to write and send personally. Public assets use isolated fictional metadata and privacy-obscured, muted gameplay. Local documentation, release-boundary tests and desktop/mobile site checks pass.
+
+Publication still requires both native package jobs, bundle verification and both installer smoke tests to pass. The release workflow enforces those dependencies. Stable-release requirements above remain unchanged.

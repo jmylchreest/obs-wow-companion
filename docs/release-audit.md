@@ -1,6 +1,7 @@
 # First-release completion audit
 
-Status: **not release ready**. Last reviewed 2026-10-26. This audit preserves the
+Status: **not qualified for a stable release**. Last reviewed 2026-10-27.
+The development-preview gate is documented in [releasing](releasing.md); a preview does not waive these stable-release requirements. This audit preserves the
 full [specification](specification.md), including the former 1.0 scope. Passing a
 unit test does not establish native gameplay compatibility. Historical external
 checks are described in [validation](validation.md); rerun them against the final

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Capture the actual app with generated media and fictional public demo data."""
+"""Capture the actual app with reviewed media and fictional public demo data."""
+import argparse
 import base64
 import json
 import os
@@ -13,6 +14,9 @@ import time
 import urllib.request
 import uuid
 
+parser=argparse.ArgumentParser()
+parser.add_argument('--sanitised-video', type=Path, help='Already reviewed, silent 30-second video with identifying details obscured')
+args=parser.parse_args()
 root = Path(tempfile.mkdtemp(prefix="owc-showcase-"))
 assets = Path("site/assets")
 assets.mkdir(parents=True, exist_ok=True)
@@ -33,7 +37,7 @@ def driver(path, data=None, method=None):
         headers={"Content-Type":"application/json"}, method=method)
     return json.load(urllib.request.urlopen(request, timeout=20))["value"]
 try:
-    launch(["Xvfb",":124","-screen","0","1440x1000x24","-nolisten","tcp"],"xvfb.log")
+    launch(["Xvfb",":124","-screen","0","1440x1200x24","-nolisten","tcp"],"xvfb.log")
     time.sleep(1)
     app = launch([os.environ.get("OWC_BINARY","target/debug/obs-wow-companion"),
                   "--no-open","--data-dir",str(root/"data")],"app.log")
@@ -46,20 +50,24 @@ try:
         return driver(prefix+"/execute/sync",{"script":script,"args":args or []})
     def click(selector):
         js("document.querySelector(arguments[0]).click()",[selector])
+        time.sleep(.35)
     def screenshot(name):
         (assets/name).write_bytes(base64.b64decode(driver(prefix+"/screenshot")))
-    driver(prefix+"/window/rect",{"width":1440,"height":1000})
+    driver(prefix+"/window/rect",{"width":1440,"height":1200})
     driver(prefix+"/url",{"url":url})
     time.sleep(2)
     screenshot("setup.png")
     click("#wizard-close")
     source = root/"demo.mp4"
-    subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","lavfi","-i",
-        "testsrc2=size=960x540:rate=30","-f","lavfi","-i","anullsrc=r=48000:cl=stereo",
-        "-t","30","-map","0:v","-map","1:a","-map","1:a",
-        "-vf","hue=s=0.18,eq=brightness=-0.12:contrast=0.85,drawbox=x=0:y=190:w=iw:h=130:color=0x081216@0.95:t=fill,drawtext=text='DEMO FOOTAGE':fontsize=44:fontcolor=white:x=(w-tw)/2:y=215,drawtext=text='Generated test video • Fictional encounter data':fontsize=23:fontcolor=white:x=(w-tw)/2:y=275",
-        "-c:v","libx264","-preset","fast","-crf","25","-g","30","-pix_fmt","yuv420p",
-        "-c:a","aac","-metadata:s:a:0","title=Game","-metadata:s:a:1","title=Voice",str(source)],check=True)
+    if args.sanitised_video:
+        shutil.copyfile(args.sanitised_video,source)
+    else:
+        subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-f","lavfi","-i",
+            "testsrc2=size=960x540:rate=30","-f","lavfi","-i","anullsrc=r=48000:cl=stereo",
+            "-t","30","-map","0:v","-map","1:a","-map","1:a",
+            "-vf","hue=s=0.18,eq=brightness=-0.12:contrast=0.85,drawbox=x=0:y=190:w=iw:h=130:color=0x081216@0.95:t=fill,drawtext=text='DEMO FOOTAGE':fontsize=44:fontcolor=white:x=(w-tw)/2:y=215,drawtext=text='Generated test video • Fictional encounter data':fontsize=23:fontcolor=white:x=(w-tw)/2:y=275",
+            "-c:v","libx264","-preset","fast","-crf","25","-g","30","-pix_fmt","yuv420p",
+            "-c:a","aac","-metadata:s:a:0","title=Game","-metadata:s:a:1","title=Voice",str(source)],check=True)
     start = 1792944000000
     records = [
         ("Ruby Life Pools","mythic_plus",20,"success",2,["Weekly keys","Review"]),
@@ -101,31 +109,43 @@ try:
             break
         time.sleep(.2)
     assert js("return reviewPlayer.readyState()>=2")
+    play = driver(prefix+"/element",{"using":"css selector","value":"#toggle-play"})
+    driver(prefix+"/element/"+next(iter(play.values()))+"/click",{})
+    time.sleep(1)
     js("reviewPlayer.currentTime(12);reviewPlayer.pause();reviewPlayer.userActive(true)")
-    time.sleep(.5)
+    time.sleep(1)
     screenshot("review.png")
     click("#clip-options > summary")
-    js("document.getElementById('share-path').value='raid-review.zip';document.getElementById('clip-options').scrollIntoView({block:'center'})")
+    js("document.getElementById('share-path').value='raid-review.zip';document.getElementById('share-path').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('clip-options').scrollIntoView({block:'center'})")
+    time.sleep(.5)
     screenshot("export.png")
     click("#setup-tab")
     click("[data-settings-tab=export]")
+    time.sleep(.5)
     screenshot("settings.png")
     click("#library-tab")
     js("document.querySelector('.review-scroll').scrollTop=0") if js("return !!document.querySelector('.review-scroll')") else None
     js("document.getElementById('clip-options').open=false;document.getElementById('player').scrollIntoView({block:'start'});reviewPlayer.currentTime(5)")
-    capture=launch(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1440x960",
-        "-framerate","20","-i",":124+0,40","-t","10","-vf","scale=1152:-2","-c:v","libx264",
+    capture=launch(["ffmpeg","-nostdin","-v","error","-y","-f","x11grab","-video_size","1440x1160",
+        "-framerate","20","-i",":124+0,40","-t","35","-vf","scale=1152:-2","-c:v","libx264",
         "-preset","fast","-crf","25","-pix_fmt","yuv420p","-movflags","+faststart",str(assets/"review-demo.mp4")],"capture.log")
     play = driver(prefix+"/element",{"using":"css selector","value":"#toggle-play"})
     driver(prefix+"/element/"+next(iter(play.values()))+"/click",{})
-    time.sleep(3)
+    time.sleep(6)
     assert js("return !reviewPlayer.paused() && reviewPlayer.currentTime()>5"), "demo must show actual playback"
-    js("reviewPlayer.currentTime(13);reviewPlayer.playbackRate(.5);reviewPlayer.userActive(true)")
-    time.sleep(3)
-    js("reviewPlayer.currentTime(23);reviewPlayer.userActive(true)")
+    js("reviewPlayer.pause();document.querySelector('#deaths tr').click();reviewPlayer.userActive(true)")
+    time.sleep(4)
+    js("reviewPlayer.playbackRate(.5);reviewPlayer.play().catch(()=>{});reviewPlayer.userActive(true)")
+    time.sleep(8)
+    js("reviewPlayer.pause();document.getElementById('clip-options').open=true;document.getElementById('share-path').value='raid-review.zip';document.getElementById('share-path').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('clip-options').scrollIntoView({block:'end'})")
+    time.sleep(5)
+    click('#select-range')
+    js("document.getElementById('trim-start').value=10;document.getElementById('trim-end').value=24;document.getElementById('trim-start').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('trim-end').dispatchEvent(new Event('input',{bubbles:true}))")
+    time.sleep(5)
+    js("document.getElementById('clip-options').open=false;document.querySelector('.review-scroll').scrollTop=0;reviewPlayer.userActive(true)")
     capture.wait(timeout=20)
     driver(prefix,method="DELETE")
-    print(f"Public synthetic screenshots and recording: {assets}; private evidence: {root}")
+    print(f"Public screenshots and recording: {assets}; private evidence: {root}")
 finally:
     for process in reversed(processes):
         if process.poll() is None:

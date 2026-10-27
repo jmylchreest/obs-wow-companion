@@ -1,0 +1,55 @@
+name: Report a problem
+description: Something did not record, play back or behave as expected.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping test the preview. Please keep this to one problem per report.
+        Do not include OBS passwords, private session links, full combat logs or recordings unless you have checked what they contain.
+  - type: input
+    id: version
+    attributes:
+      label: Companion version
+      placeholder: 0.1.0-dev.1, or the commit if you built it yourself
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      description: On Linux, include your distribution and desktop or window manager, and whether you use Wayland or X11.
+      placeholder: Windows 11, or Arch Linux with niri on Wayland
+    validations:
+      required: true
+  - type: input
+    id: obs
+    attributes:
+      label: OBS version and recording settings
+      description: Include the recording format and encoder if the problem concerns video or sound.
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: WoW version and activity
+      placeholder: Retail, Mythic+; or Classic, raid
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead? Include the steps needed to reproduce it.
+    validations:
+      required: true
+  - type: textarea
+    id: events
+    attributes:
+      label: Relevant events or screenshots
+      description: The small arrow in the bottom-right corner opens Events. Copy the relevant lines, or attach a checked log. Remove passwords, session links, names and private paths first.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have checked any attached logs or screenshots for private information.
+          required: true

@@ -4,11 +4,11 @@
 
 A free, open-source companion for World of Warcraft players who use OBS. Automatically record encounters, jump back to a death, slow down a boss mechanic, and share the moment with your group.
 
-[Take a look](https://jmylchreest.github.io/obs-wow-companion/) · [OBS setup guide](docs/obs-setup.md) · [Compatibility](docs/compatibility.md) · [Report a problem](https://github.com/jmylchreest/obs-wow-companion/issues)
+[Take a look](https://jmylchreest.github.io/obs-wow-companion/) · [Quick start](docs/quick-start.md) · [OBS setup guide](docs/obs-setup.md) · [Compatibility](docs/compatibility.md) · [Report a problem](https://github.com/jmylchreest/obs-wow-companion/issues)
 
-![The recording library and video review player, using fictional encounters and generated test footage](site/assets/review.png)
+![The recording library and video review player, using fictional library entries and gameplay obscured for privacy](site/assets/review.png)
 
-> **Development preview:** the app works in local Linux testing, but it is still an early build. Windows is a first-release target and is still being tested. Check the [compatibility matrix](docs/compatibility.md) before relying on it for raid night. Screenshots use synthetic test data, not your logs or live gameplay.
+> **Development preview:** the app works in local Linux testing, but it is still an early build. Windows packages have automated checks; real gameplay testing is still needed. Check the [compatibility matrix](docs/compatibility.md) before relying on it for raid night. The demo uses cropped, softened and muted gameplay; library entries and markers are demonstration data.
 
 ## What you can do
 
@@ -33,7 +33,7 @@ Linux needs GTK 3 and WebKitGTK 4.1 runtime libraries. Windows needs WebView2 Ru
 
 ### 2. Launch Companion and follow setup
 
-Use a [development build](#development-build). The setup wizard walks you through:
+Download the [development preview](https://github.com/jmylchreest/obs-wow-companion/releases), extract the archive and run the app. You do not need Rust. See the [quick start](docs/quick-start.md) for platform requirements. The setup wizard walks you through:
 
 1. **OBS connection:** in OBS, open **Tools → WebSocket Server Settings**, enable the server and authentication, and enter its password in Companion.
 2. **Recording settings:** choose the companion recording folder and check the recommended output settings.
@@ -69,9 +69,9 @@ Open a recording, expand **Export**, select a range if needed, choose the audio 
 
 [Sharing guide](docs/sharing.md) · [Watch the actual controls with demo footage](https://jmylchreest.github.io/obs-wow-companion/#demo)
 
-## Development build
+## Building from source
 
-There is no stable release yet. Successful [GitHub Actions package builds](https://github.com/jmylchreest/obs-wow-companion/actions) provide development artifacts when available. Those are test builds, not a compatibility guarantee.
+For a packaged build, use the [GitHub prerelease downloads](https://github.com/jmylchreest/obs-wow-companion/releases). These are early test builds, not a stable release or a compatibility guarantee.
 
 To build from source, install **Rust 1.95 or newer**, clone this repository, then run:
 
@@ -97,7 +97,7 @@ Optional launch arguments:
 
 ## Help test it
 
-[Open an issue](https://github.com/jmylchreest/obs-wow-companion/issues) with your operating system, OBS version, game version and a short description of what happened. The app's **Events** panel helps explain connection, recording and export problems. Remove passwords and personal information before sharing diagnostics.
+[Send a test report or report a problem](https://github.com/jmylchreest/obs-wow-companion/issues/new/choose) with your operating system, OBS version, game version and a short description of what happened. The app's **Events** panel helps explain connection, recording and export problems. Remove passwords and personal information before sharing diagnostics.
 
 For contributors: [implementation plan](docs/implementation-plan.md), [specification](docs/specification.md), [release audit](docs/release-audit.md), [validation evidence](docs/validation.md), [CI](docs/ci.md) and [release instructions](docs/releasing.md).
 
