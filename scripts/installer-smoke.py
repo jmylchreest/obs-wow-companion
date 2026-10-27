@@ -3,6 +3,7 @@
 import functools
 import http.server
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -16,7 +17,12 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-handler = functools.partial(QuietHandler, directory=str(directory))
+served = root / "served"
+served.mkdir()
+archive_name = "owc-app-x86_64-pc-windows-msvc.zip" if os.name == "nt" else "owc-app-x86_64-unknown-linux-gnu.tar.xz"
+archive = served / archive_name
+shutil.copyfile(directory / archive_name, archive)
+handler = functools.partial(QuietHandler, directory=str(served))
 server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
@@ -30,6 +36,16 @@ try:
     else:
         command = ["sh", str(directory / "owc-app-installer.sh")]
         executable = "obs-wow-companion"
+    # A changed download must be rejected before anything is installed.
+    with archive.open("ab") as altered:
+        altered.write(b"tampered-download")
+    rejected = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
+    rejection = rejected.stdout + rejected.stderr
+    (root / "checksum-rejection.log").write_text(rejection, encoding="utf-8")
+    assert rejected.returncode != 0, "Installer accepted a changed archive"
+    assert "checksum" in rejection.lower(), "Failure must identify archive integrity"
+    assert not list((root / "bin").rglob(executable)), "Changed archive installed a binary"
+    shutil.copyfile(directory / archive_name, archive)
     with (root / "installer.log").open("w") as log:
         subprocess.run(command, env=env, stdout=log, stderr=log, check=True, timeout=120)
     matches = list((root / "bin").rglob(executable))

@@ -25,6 +25,8 @@
 
 ### Fixed
 
+- Verify the Windows installer download against its embedded SHA-256 checksum before extracting or running it. Test both installers against a modified download before installing the genuine package.
+
 - Retain the paused video frame when switching between Recordings and Settings.
 
 - Read OBS audio track names stored in NAME metadata, including existing recordings.

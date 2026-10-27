@@ -80,9 +80,13 @@ class ReleaseTests(unittest.TestCase):
                     archive = directory / ("owc-app-" + target + extension)
                     Path(str(archive)+".sha256").write_text(ci.checksum(archive), encoding="utf-8")
                     installer = "owc-app-installer.ps1" if target.endswith("msvc") else "owc-app-installer.sh"
-                    (directory/installer).write_text("https://github.com/jmylchreest/obs-wow-companion/releases/download/v0.1.0-dev.1\n" + ci.checksum(archive), encoding="utf-8")
+                    (directory/installer).write_text("https://github.com/jmylchreest/obs-wow-companion/releases/download/v0.1.0-dev.1\n" + ("  Invoke-DownloadFile -client $wc -url $url -path $dir_path\n" if target.endswith("msvc") else ci.checksum(archive)), encoding="utf-8")
                 (directory/"source.tar.gz.sha256").write_text(ci.checksum(directory/"source.tar.gz"), encoding="utf-8")
                 ci.bundle(directory)
+                patched = (directory/"owc-app-installer.ps1").read_text()
+                self.assertIn("Get-FileHash -LiteralPath $dir_path -Algorithm SHA256", patched)
+                self.assertIn("Archive checksum mismatch; installation cancelled", patched)
+                self.assertEqual(patched.count("# Companion archive integrity check"), 1)
                 output = Path("target/release-bundle")
                 self.assertEqual((output/"release-notes.md").read_text(), "Fixture release notes")
                 notes = Path("docs/releases/0.1.0-dev.1.md")
@@ -102,6 +106,18 @@ class ReleaseTests(unittest.TestCase):
                     run.assert_not_called()
             finally:
                 os.chdir(previous)
+
+    def test_windows_template_changes_fail_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            archive = directory / "owc-app-x86_64-pc-windows-msvc.zip"
+            archive.write_bytes(b"fixture")
+            Path(str(archive)+".sha256").write_text(ci.checksum(archive))
+            installer = directory / "owc-app-installer.ps1"
+            installer.write_text("Unexpected upstream download template")
+            with self.assertRaises(ValueError):
+                ci.secure_windows_installer(directory)
+            self.assertEqual(installer.read_text(), "Unexpected upstream download template")
 
     def test_external_actions_are_immutable(self):
         for path in [*Path(".github/workflows").glob("*.yml"), *Path(".github/actions").rglob("action.yml")]:

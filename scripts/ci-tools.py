@@ -75,6 +75,24 @@ def package(directory, target):
     print(f"Verified package: {binary}")
     return binary
 
+def secure_windows_installer(directory):
+    # cargo-dist 0.32's PowerShell template omits the shell installer's checksum check.
+    archive = verified_archive(directory, "x86_64-pc-windows-msvc")
+    installer = directory / "owc-app-installer.ps1"
+    text = installer.read_text(encoding="utf-8")
+    anchor = "  Invoke-DownloadFile -client $wc -url $url -path $dir_path\n"
+    check = (f"  # Companion archive integrity check\n"
+             f"  if ($artifact_name -ne '{archive.name}' -or "
+             f"(Get-FileHash -LiteralPath $dir_path -Algorithm SHA256).Hash -ne '{checksum(archive)}') {{\n"
+             '    throw "Archive checksum mismatch; installation cancelled"\n'
+             "  }\n")
+    if anchor + check in text:
+        return
+    if text.count(anchor) != 1 or "# Companion archive integrity check" in text:
+        raise ValueError("Unrecognised PowerShell installer template; review checksum placement")
+    installer.write_text(text.replace(anchor, anchor + check), encoding="utf-8")
+
+
 def bundle(directory):
     for target in TARGETS:
         verified_archive(directory, target)
@@ -84,6 +102,7 @@ def bundle(directory):
             raise ValueError(f"Missing release artifact: {filename}")
     if checksum(directory / "source.tar.gz") != (directory / "source.tar.gz.sha256").read_text(encoding="utf-8").split()[0]:
         raise ValueError("Source archive checksum mismatch")
+    secure_windows_installer(directory)
     for target, installer in [("x86_64-unknown-linux-gnu", "owc-app-installer.sh"),
                               ("x86_64-pc-windows-msvc", "owc-app-installer.ps1")]:
         text = (directory / installer).read_text(encoding="utf-8")

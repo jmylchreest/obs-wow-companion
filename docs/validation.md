@@ -978,3 +978,10 @@ Commit `f2101a1` includes the review/settings layout, protected recording filter
 Remote [run 40501052235](https://github.com/jmylchreest/obs-wow-companion/actions/runs/40501052235) passed Linux and Windows quality checks and the native Windows package service, media, desktop and crash-recovery checks. Linux packaging stopped during dependency downloads; bundle and installer checks were therefore not reached. The following candidate changes the slow Ubuntu mirror and keeps bounded download timeouts. Final candidate package and installer results must be recorded before a preview is published.
 
 Public screenshots use isolated fictional library data. The authorised real-gameplay excerpt is cropped, softened to obscure floating player names, and stripped of original audio. No live library or OBS configuration was modified for the capture.
+
+
+### Preview package and installer integrity gate
+
+[Run 40549550646](https://github.com/jmylchreest/obs-wow-companion/actions/runs/40549550646), commit `f2101a1`, passed both native package jobs: extracted service/media, desktop, Linux WebKit playback and process crash recovery. The Ubuntu mirror change resolved the dependency-download failure. Bundle validation then rejected the generated Windows installer because cargo-dist 0.32.0 does not embed its archive checksum check in PowerShell. No release was published.
+
+Bundle preparation now inserts a SHA-256 check immediately after the archive download and before extraction; unexpected upstream templates fail closed. Release-policy tests cover the insertion, idempotence and template drift. Installer smoke tests serve a modified archive first and require checksum rejection with no installed binary, then install the genuine archive and run the service. The Linux installer check passes locally against the downloaded native package; native Windows execution remains a required remote gate.
