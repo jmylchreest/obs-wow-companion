@@ -12,19 +12,58 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      packages: ${{ steps.scope.outputs.packages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed-files"
+          fi
+          if [ "$EVENT" != pull_request ] || grep -Eq '^\.github/|^scripts/|^Cargo\.(toml|lock)$|(^|/)Cargo\.toml$|(^|/)build\.rs$|^dist|^install|^assets/|^crates/app/(assets|resources)/|^rust-toolchain' "$RUNNER_TEMP/changed-files"; then
+            echo 'packages=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'packages=false' >> "$GITHUB_OUTPUT"
+          fi
   quality:
     uses: ./.github/workflows/quality.yml
   packages:
-    needs: quality
+    needs:
+      - quality
+      - changes
     uses: ./.github/workflows/packages.yml
+    if: needs.changes.outputs.packages == 'true'
   complete:
     name: CI complete
     if: always()
-    needs: [quality, packages]
+    needs:
+      - quality
+      - packages
+      - changes
     runs-on: ubuntu-24.04
     steps:
       - name: Require every verification job
         env:
           QUALITY: ${{ needs.quality.result }}
           PACKAGES: ${{ needs.packages.result }}
-        run: test "$QUALITY" = success && test "$PACKAGES" = success
+          PACKAGES_REQUIRED: ${{ needs.changes.outputs.packages }}
+          CHANGES: ${{ needs.changes.result }}
+        run: |
+          test "$QUALITY" = success
+          test "$CHANGES" = success
+          if [ "$PACKAGES_REQUIRED" = true ]; then
+            test "$PACKAGES" = success
+          else
+            test "$PACKAGES" = skipped
+          fi
