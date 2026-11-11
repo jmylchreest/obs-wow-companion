@@ -43,7 +43,8 @@ jobs:
       - run: cargo test --workspace --doc --locked
       - run: python scripts/check-docs.py
       - name: Parser benchmark
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref,
+          'refs/tags/'))
         run: |
           cargo bench -p owc-wow-log --bench ingestion --locked
           cargo bench -p owc-library --bench library --locked

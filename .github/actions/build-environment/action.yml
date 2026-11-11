@@ -27,6 +27,7 @@ runs:
       run: |
         rustup toolchain install 1.95 --profile minimal --component rustfmt --component clippy
         rustup default 1.95
+      if: inputs.compile == 'true'
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
@@ -35,3 +36,8 @@ runs:
           target
         key: cargo-${{ runner.os }}-1.95-${{ hashFiles('Cargo.lock', '.github/actions/build-environment/action.yml') }}
         restore-keys: cargo-${{ runner.os }}-1.95-
+      if: inputs.compile == 'true'
+inputs:
+  compile:
+    description: Install Rust and restore compilation caches
+    default: 'true'
